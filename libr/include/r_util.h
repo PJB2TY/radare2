@@ -36,6 +36,7 @@ int gettimeofday (struct timeval* p, void* tz);
 #include "r_util/r_new_rbtree.h"
 #include "r_util/r_intervaltree.h"
 #include "r_util/r_big.h"
+#include "r_util/r_base32.h"
 #include "r_util/r_base36.h"
 #include "r_util/r_base64.h"
 #include "r_util/r_base91.h"
@@ -86,6 +87,9 @@ int gettimeofday (struct timeval* p, void* tz);
 #include "r_util/r_token.h"
 #include "r_util/r_axml.h"
 // requires io, core, ... #include "r_util/r_print.h"
+
+R_API int r_lz4_compress(ut8 *obuf, ut8 *buf, size_t buf_size, const int max_chain);
+R_API ut8 *r_lz4_decompress(const ut8* input, size_t input_size, size_t *output_size);
 
 #ifdef __cplusplus
 extern "C" {

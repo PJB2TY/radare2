@@ -1,17 +1,9 @@
-/* radare - LGPL - Copyright 2020-2022 - pancake, thestr4ng3r */
+/* radare - LGPL - Copyright 2020-2024 - pancake, thestr4ng3r */
 
 #ifndef RADARE2_R2R_H
 #define RADARE2_R2R_H
 
 #include <r_util.h>
-
-#if R_SYS_BITS & R_SYS_BITS_64
-#define R2R_ARCH_OS R_SYS_OS "-"R_SYS_ARCH "_64"
-#elif R_SYS_BITS & R_SYS_BITS_32
-#define R2R_ARCH_OS R_SYS_OS "-"R_SYS_ARCH "_32"
-#elif
-#define R2R_ARCH_OS R_SYS_OS "-"R_SYS_ARCH
-#endif
 
 typedef struct r2r_cmd_test_string_record {
 	char *value;
@@ -45,6 +37,8 @@ typedef struct r2r_cmd_test_t {
 	R2RCmdTestStringRecord regexp_err;
 	R2RCmdTestStringRecord env;
 	R2RCmdTestBoolRecord broken;
+	R2RCmdTestBoolRecord oldabi;
+	R2RCmdTestBoolRecord newabi;
 	R2RCmdTestNumRecord timeout;
 	ut64 run_line;
 	bool load_plugins;
@@ -65,7 +59,9 @@ typedef struct r2r_cmd_test_t {
 	macro_str ("REGEXP_OUT", regexp_out) \
 	macro_str ("REGEXP_ERR", regexp_err) \
 	macro_str ("ENV", env) \
-	macro_bool ("BROKEN", broken)
+	macro_bool ("BROKEN", broken) \
+	macro_bool ("OLDABI", oldabi) \
+	macro_bool ("NEWABI", newabi) \
 
 typedef enum r2r_asm_test_mode_t {
 	R2R_ASM_TEST_MODE_ASSEMBLE = 1,
@@ -125,6 +121,11 @@ typedef struct r2r_run_config_t {
 	const char *rasm2_cmd;
 	const char *json_test_file;
 	ut64 timeout_ms;
+	int shallow;
+	bool skip_cmd;
+	bool skip_fuzz;
+	bool skip_asm;
+	bool skip_json;
 } R2RRunConfig;
 
 typedef struct r2r_process_output_t {
@@ -208,5 +209,6 @@ R_API char *r2r_test_name(R2RTest *test);
 R_API bool r2r_test_broken(R2RTest *test);
 R_API R2RTestResultInfo *r2r_run_test(R2RRunConfig *config, R2RTest *test);
 R_API void r2r_test_result_info_free(R2RTestResultInfo *result);
+R_IPI const char *getarchos(void);
 
 #endif //RADARE2_R2R_H

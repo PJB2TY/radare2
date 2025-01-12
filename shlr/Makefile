@@ -37,7 +37,7 @@ WGET?=curl -o
 endif
 
 ifeq ($(CS_RELEASE),1)
-CS_VER=5.0
+CS_VER=5.0.3
 CS_TAR=https://codeload.github.com/capstone-engine/capstone/tar.gz/$(CS_VER)
 #CS_TAR=http://capstone-engine.org/download/$(CS_VER)/capstone-$(CS_VER).tgz
 CS_PATCHES=0
@@ -49,14 +49,14 @@ CS_ARCHIVE=https://$(CS_URL_BASE)/archive
 CS_UPD=20201203
 # NOTE: when you update CS_TIP or CS_BRA, also update them in shlr/meson.build
 ifeq ($(USE_CSNEXT),1)
-CS_TIP=58528853111377ba2f8ecb781f8d3bdc595900ed
+CS_TIP=0a29bf80017b8422c79ba51e3ad5c34ba5ee6142
 CS_BRA=next
 else
 ifeq ($(USE_CS4),1)
 CS_TIP=0efa3cc530ea188c0e03c945ab884ee19dd16342
 CS_BRA=v4
 else
-CS_TIP=11a2ea286336c52c485da8256ea70148b04a990c
+CS_TIP=8455b3c5a53b02e524494c7e72a3946a32518170
 CS_BRA=v5
 endif
 endif
@@ -78,7 +78,6 @@ endif
 SHLR?=$(shell pwd)
 AR?=ar
 RANLIB?=ranlib
-# MODS=sdb zip java mpc
 MODS=zip java mpc
 MODS+=gdb qnx ar
 # lz4
@@ -87,11 +86,8 @@ ifeq (1,$(WITH_GPL))
 MODS+=grub
 endif
 endif
-SDB_URL=https://github.com/radareorg/sdb
-#SDB_URL=/Users/pancake/prg/sdb
 SPP_URL=https://github.com/trufae/spp
 PWD=$(shell pwd)
-SDB_CONFIG=${PWD}/sdb-config.mk
 
 CFLAGS_SHARED=${PIC_CFLAGS}
 
@@ -107,12 +103,6 @@ preall: libwinkd capstone-build bochs sdbs
 		$(MAKE) -C $$MOD HAVE_VALA= ROOT="${PWD}/../" CC="${CC}" ; \
 	done
 
-SDBFILES=sdb/src/.sdb${EXT_EXE} sdb/sdb${EXT_EXE} sdb/src/.sdb sdb/sdb
-PREMODS=capstone gdb winkd sdb bochs ar
-
-clean mrproper:
-	rm -f ${SDBFILES}
-	@for MOD in ${PREMODS} ${MODS} ; do $(MAKE) -C $$MOD clean ; done
 
 ifeq ($(BUILD_OS),windows)
 BUILD_EXT_EXE=.exe
@@ -125,10 +115,18 @@ ifneq ($(CC),cccl)
 PIC=-fPIC
 endif
 
-SDB_HOST=sdb/sdb$(BUILD_EXT_EXE)
-SDB_LIBA=sdb/src/libsdb.$(EXT_AR)
+SDB_ROOT=../subprojects/sdb
+SDB_HOST=$(SDB_ROOT)/sdb$(BUILD_EXT_EXE)
+SDB_LIBA=$(SDB_ROOT)/src/libsdb.$(EXT_AR)
 
-$(SDB_HOST):
+SDBFILES=$(SDB_ROOT)/src/.sdb${EXT_EXE} $(SDB_ROOT)/sdb${EXT_EXE} $(SDB_ROOT)/src/.sdb $(SDB_ROOT)/sdb
+PREMODS=capstone gdb winkd sdb bochs ar
+
+clean mrproper:
+	rm -f ${SDBFILES}
+	@for MOD in ${PREMODS} ${MODS} ; do $(MAKE) -C $$MOD clean ; done
+
+$(SDB_HOST): $(SDB_ROOT)
 	$(MAKE) sdb-host HOST_CC=$(HOST_CC) CC=$(HOST_CC)
 
 $(SDB_LIBA):
@@ -137,18 +135,21 @@ $(SDB_LIBA):
 sdbs: $(SDB_HOST)
 	$(MAKE) $(SDB_LIBA) RANLIB="$(RANLIB)"
 
+$(SDB_ROOT):
+	$(MAKE) -C ../subprojects
+
 sdb-host:
 	@echo
 	@echo ">>>>>>>>"
 	@echo "HOST SDB"
 	@echo ">>>>>>>>"
 	@echo
-	$(MAKE) -C sdb clean ; rm -f sdb/src/*.o sdb/include/sdb/version.h
-	$(MAKE) -C sdb/src "CC=${HOST_CC}" LDFLAGS='${HOST_LDFLAGS}' CPPFLAGS='-I$(SHLR)/sdb/include' CFLAGS='${HOST_CFLAGS} ${PIC}' bin
-	cp -f sdb/src/sdb${BUILD_EXT_EXE} sdb/src/.sdb${BUILD_EXT_EXE}
-	cp -f sdb/src/sdb${BUILD_EXT_EXE} sdb/sdb$(BUILD_EXT_EXE)
+	$(MAKE) -C $(SDB_ROOT) clean ; rm -f $(SDB_ROOT)/src/*.o $(SDB_ROOT)/include/sdb/version.h
+	$(MAKE) -C $(SDB_ROOT)/src "CC=${HOST_CC}" LDFLAGS='${HOST_LDFLAGS}' CPPFLAGS='-I$(SDB_ROOT)/include' CFLAGS='${HOST_CFLAGS} ${PIC}' bin
+	cp -f $(SDB_ROOT)/src/sdb${BUILD_EXT_EXE} $(SDB_ROOT)/src/.sdb${BUILD_EXT_EXE}
+	cp -f $(SDB_ROOT)/src/sdb${BUILD_EXT_EXE} $(SDB_ROOT)/sdb$(BUILD_EXT_EXE)
 	rm -f $(SDB_LIBA)
-	-file sdb/sdb$(BUILD_EXT_EXE)
+	-file $(SDB_ROOT)/sdb$(BUILD_EXT_EXE)
 
 sdb-target:
 	@echo
@@ -157,18 +158,18 @@ sdb-target:
 	@echo ">>>>>>>>>>"
 	@echo
 	rm -f src/libsdb.$(EXT_AR)
-	$(MAKE) -C sdb clean ; rm -f sdb/src/*.o ../include/sdb/version.h
-	$(MAKE) -C sdb/src ../include/sdb/version.h
+	$(MAKE) -C $(SDB_ROOT) clean ; rm -f $(SDB_ROOT)/src/*.o ../include/sdb/version.h
+	$(MAKE) -C $(SDB_ROOT)/src ../include/sdb/version.h
 ifeq ($(EXT_EXE),.wasm)
-	$(MAKE) -C sdb/src ARCH=xxx EXT_AR=.$(EXT_AR) RANLIB="${RANLIB}" CPPFLAGS=-I$(SHLR)/sdb/include \
+	$(MAKE) -C $(SDB_ROOT)/src ARCH=xxx EXT_AR=.$(EXT_AR) RANLIB="${RANLIB}" CPPFLAGS=-I$(SDB_ROOT)/include \
 		CFLAGS_SHARED="${CFLAGS_SHARED} -DHAVE_MMAN=0" \
 		CC="${CC}" AR="${AR}" ARCH=undefined CFLAGS='${CFLAGS} -DHAVE_MMAN=0' LDFLAGS='${LDFLAGS}' libsdb.$(EXT_AR)
 else
-	$(MAKE) -C sdb/src ARCH=xxx EXT_AR=.$(EXT_AR) RANLIB="${RANLIB}" CPPFLAGS="-I$(SHLR)/sdb/include -DHAVE_SYSTEM=0" \
+	$(MAKE) -C $(SDB_ROOT)/src ARCH=xxx EXT_AR=.$(EXT_AR) RANLIB="${RANLIB}" CPPFLAGS="-I$(SDB_ROOT)/include -DHAVE_SYSTEM=0" \
 		CFLAGS_SHARED="${CFLAGS_SHARED}" \
 		CC="${CC}" AR="${AR}" ARCH=undefined LDFLAGS='${LDFLAGS}' libsdb.$(EXT_AR)
 endif
-	$(RANLIB) sdb/src/libsdb.$(EXT_AR)
+	$(RANLIB) $(SDB_ROOT)/src/libsdb.$(EXT_AR)
 
 .PHONY: sdb-sync sync-sdb sdbclean sdb-native sdb-target
 SDB_F=README.md config.mk src include Makefile meson.build wasi.mk wasi.sh
@@ -185,23 +186,9 @@ bochs:
 	$(MAKE) -C bochs all
 
 sdb-clean clean-sdb:
-	$(MAKE) -C sdb clean
-	rm -f sdb/sdb.exe
-	rm -f sdb/src/libsdb.${EXT_AR}
-
-sdb-sync sync-sdb:
-	rm -rf sdb sdb.vc
-	git clone --depth 1 ${SDB_URL} sdb.vc
-	mkdir -p sdb
-	cp -rf ${SDB_SYNCFILES} sdb
-	rm -rf sdb.vc
-	rm -f include/sdb/version.h
-	$(MAKE) -C sdb include/sdb/version.h
-	mkdir -p sdb/test sdb/memcache
-	sed -e 's,HAVE_VALA=,HAVE_VALA=#,' sdb/config.mk > .t
-	mv .t sdb/config.mk
-	echo all clean mrproper: | tee sdb/test/Makefile > sdb/memcache/Makefile
-	git add sdb
+	$(MAKE) -C $(SDB_ROOT) clean
+	rm -f $(SDB_ROOT)/sdb.exe
+	rm -f $(SDB_ROOT)/src/libsdb.${EXT_AR}
 
 ifeq ($(WITH_LIBR),1)
 install: libr_shlr.${EXT_AR}
@@ -218,6 +205,11 @@ install-symlink symstall:
 
 uninstall deinstall:
 	rm -f ${DESTDIR}${LIBDIR}/libr_shlr.${EXT_AR}
+
+.PHONY: capstone capstone-sync capstone-build capstone-clean capstone-patch capstone-pull
+
+capstone-pull:
+	$(MAKE) CS_RELEASE=1 WITHOUT_PULL=0 USE_CAPSTONE=0 WANT_CAPSTONE=1 capstone
 
 ifeq ($(WANT_CAPSTONE),0)
 capstone:
@@ -361,19 +353,11 @@ SHLRS+=zip/librz.a
 libr_shlr.${EXT_AR}:
 	rm -rf .libr
 	mkdir .libr
-ifeq ($(CC),emcc)
-	for LIB in ${SHLRS} ; do \
-		if [ -f "$${LIB}" ]; then emcc -emit-llvm -nostdlib -Wl,--whole-archive -o .libr/$$(basename $${LIB}.a).o $${LIB} ; fi ; \
-	done
-	${AR} rs $@ .libr/*.o
-	$(RANLIB) $@
-else
 	for LIB in ${SHLRS} ; do \
 		if [ -f "$${LIB}" ]; then ${PARTIALLD} -o .libr/$$(basename $${LIB}.a).o $${LIB} ; fi ; \
 	done
 	${AR} rs $@ .libr/*.o
 	$(RANLIB) $@
-endif
 
 .PHONY: spp
 

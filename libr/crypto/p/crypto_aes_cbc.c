@@ -19,7 +19,7 @@ static bool aes_cbc_set_key(RCryptoJob *cj, const ut8 *key, int keylen, int mode
 }
 
 static int aes_cbc_get_key_size(RCryptoJob *cj) {
-	r_return_val_if_fail (cj, -1);
+	R_RETURN_VAL_IF_FAIL (cj, -1);
 	return cj->key_len;
 }
 
@@ -101,10 +101,12 @@ static bool update(RCryptoJob *cj, const ut8 *buf, int len) {
 }
 
 RCryptoPlugin r_crypto_plugin_aes_cbc = {
+	.type = R_CRYPTO_TYPE_ENCRYPT,
 	.meta = {
 		.name = "aes-cbc",
+		.desc = "Rijndael block cipher with Cipher Block Chaining mode",
 		.author = "pancake",
-		.license = "LGPL",
+		.license = "LGPL-3.0-only",
 	},
 	.set_key = aes_cbc_set_key,
 	.get_key_size = aes_cbc_get_key_size,

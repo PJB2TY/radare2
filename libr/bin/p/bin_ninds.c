@@ -103,7 +103,7 @@ static RList *entries(RBinFile *bf) {
 }
 
 static RBinInfo *info(RBinFile *bf) {
-	r_return_val_if_fail (bf && bf->buf, NULL);
+	R_RETURN_VAL_IF_FAIL (bf && bf->buf, NULL);
 	RBinInfo *ret = R_NEW0 (RBinInfo);
 	if (ret) {
 		char *filepath = r_str_newf ("%.12s - %.4s",
@@ -122,8 +122,9 @@ static RBinInfo *info(RBinFile *bf) {
 RBinPlugin r_bin_plugin_ninds = {
 	.meta = {
 		.name = "ninds",
+		.author = "pancake",
 		.desc = "Nintendo DS format r_bin plugin",
-		.license = "LGPL3",
+		.license = "LGPL-3.0-only",
 	},
 	.load = &load,
 	.check = &check,

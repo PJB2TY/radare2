@@ -44,13 +44,14 @@ static char *entitlements(RBinFile *bf, bool json) {
 	return NULL;
 }
 
+// TODO: remove laddr, just pass RBinFileOptions which should be inside rbinfile
 static bool load(RBinFile *bf, RBuffer *buf, ut64 laddr) {
-	r_return_val_if_fail (bf && buf, false);
+	R_RETURN_VAL_IF_FAIL (bf && buf, false);
 	struct MACH0_(opts_t) opts;
 	MACH0_(opts_set_default) (&opts, bf);
 	opts.parse_start_symbols = true;
 
-	struct MACH0_(obj_t) *mo = MACH0_(new_buf) (buf, &opts);
+	struct MACH0_(obj_t) *mo = MACH0_(new_buf) (bf, buf, &opts);
 	if (mo) {
 		bf->bo->bin_obj = mo;
 		if (mo->chained_starts) {
@@ -72,7 +73,7 @@ static void destroy(RBinFile *bf) {
 }
 
 static ut64 baddr(RBinFile *bf) {
-	r_return_val_if_fail (bf && bf->bo && bf->bo->bin_obj, UT64_MAX);
+	R_RETURN_VAL_IF_FAIL (bf && bf->bo && bf->bo->bin_obj, UT64_MAX);
 	struct MACH0_(obj_t) *mo = bf->bo->bin_obj;
 	return MACH0_(get_baddr)(mo);
 }
@@ -147,7 +148,7 @@ static void process_constructors(RBinFile *bf, RList *ret, int bits) {
 }
 
 static RList *entries(RBinFile *bf) {
-	r_return_val_if_fail (bf && bf->bo, NULL);
+	R_RETURN_VAL_IF_FAIL (bf && bf->bo, NULL);
 
 	RBinAddr *ptr = NULL;
 	struct addr_t *entry = NULL;
@@ -327,7 +328,7 @@ static RList *libs(RBinFile *bf) {
 }
 
 static RBinInfo *info(RBinFile *bf) {
-	r_return_val_if_fail (bf && bf->bo, NULL);
+	R_RETURN_VAL_IF_FAIL (bf && bf->bo, NULL);
 	RBinInfo *ret = R_NEW0 (RBinInfo);
 	if (!ret) {
 		return NULL;
@@ -433,7 +434,7 @@ static bool _patch_reloc(struct MACH0_(obj_t) *mo, RIOBind *iob, struct reloc_t 
 }
 
 static RList* patch_relocs(RBinFile *bf) {
-	r_return_val_if_fail (bf && bf->rbin, NULL);
+	R_RETURN_VAL_IF_FAIL (bf && bf->rbin, NULL);
 
 	RList *ret = NULL;
 	RIOMap *g = NULL;
@@ -585,13 +586,9 @@ beach:
 }
 
 static RBuffer *swizzle_io_read(RBinFile *bf, struct MACH0_(obj_t) *obj, RIO *io) {
-	r_return_val_if_fail (io && io->desc && io->desc->plugin, NULL);
+	R_RETURN_VAL_IF_FAIL (io && io->desc && io->desc->plugin, NULL);
 	RFixupRebaseContext ctx = {0};
-#if R2_USE_NEW_ABI
 	RBuffer *nb = r_buf_new_with_cache (obj->b, false);
-#else
-	RBuffer *nb = r_buf_new_with_buf (obj->b);
-#endif
 	RBuffer *ob = obj->b;
 	obj->b = nb;
 	ut64 count = r_buf_size (obj->b);
@@ -688,7 +685,7 @@ static RBuffer *create(RBin *bin, const ut8 *code, int clen, const ut8 *data, in
 	ut32 p_cmdsize = 0, p_entry = 0, p_tmp = 0;
 	ut32 baddr = 0x1000;
 
-	r_return_val_if_fail (bin && opt, NULL);
+	R_RETURN_VAL_IF_FAIL (bin && opt, NULL);
 
 	bool is_arm = strstr (opt->arch, "arm");
 	RBuffer *buf = r_buf_new ();
@@ -982,7 +979,8 @@ RBinPlugin r_bin_plugin_mach0 = {
 	.meta = {
 		.name = "mach0",
 		.desc = "mach0 bin plugin",
-		.license = "LGPL3",
+		.author = "pancake",
+		.license = "LGPL-3.0-only",
 	},
 	.get_sdb = &get_sdb,
 	.load = &load,

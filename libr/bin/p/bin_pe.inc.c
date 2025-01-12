@@ -10,7 +10,7 @@ static Sdb* get_sdb(RBinFile *bf) {
 }
 
 static bool load(RBinFile *bf, RBuffer *buf, ut64 loadaddr) {
-	r_return_val_if_fail (bf && buf, false);
+	R_RETURN_VAL_IF_FAIL (bf && buf, false);
 	RBinPEObj *res = PE_(r_bin_pe_new_buf) (buf, bf->rbin->verbose);
 	if (res) {
 		sdb_ns_set (bf->sdb, "info", res->kv);
@@ -154,6 +154,7 @@ static RList* sections(RBinFile *bf) {
 		sec->vaddr = sections[i].vaddr + ba;
 		sec->add = true;
 		sec->perm = 0;
+		sec->flags = sections[i].flags;
 		if (R_BIN_PE_SCN_IS_EXECUTABLE (sections[i].perm)) {
 			sec->perm |= R_PERM_X;
 			sec->perm |= R_PERM_R; // implicit

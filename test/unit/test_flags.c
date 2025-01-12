@@ -42,15 +42,15 @@ bool test_r_flag_by_spaces(void) {
 	r_flag_space_set (flags, "sp4");
 	r_flag_set (flags, "foo7", 1024, 50);
 
-	fi = r_flag_get_by_spaces (flags, 1024, "sp2", "sp4", NULL);
+	fi = r_flag_get_by_spaces (flags, false, 1024, "sp2", "sp4", NULL);
 	mu_assert_notnull (fi, "should be retrieved");
 	mu_assert_streq (fi->name, "foo3", "first defined in sp2 should be get");
 
-	fi = r_flag_get_by_spaces (flags, 1024, NULL);
+	fi = r_flag_get_by_spaces (flags, false, 1024, NULL);
 	mu_assert_notnull (fi, "something should be retrieved");
 	mu_assert_streq (fi->name, "foo1", "a random one should be get (the first)");
 
-	fi = r_flag_get_by_spaces (flags, 1024, "sp5", "sp8", "sp1", "sp3", "sp10", NULL);
+	fi = r_flag_get_by_spaces (flags, false, 1024, "sp5", "sp8", "sp1", "sp3", "sp10", NULL);
 	mu_assert_notnull (fi, "something should be retrieved");
 	mu_assert_streq (fi->name, "foo1", "first defined in sp1 should be get");
 
@@ -58,7 +58,7 @@ bool test_r_flag_by_spaces(void) {
 	mu_end;
 }
 
-bool test_r_flag_get_at() {
+bool test_r_flag_get_at(void) {
 	RFlag *flag = r_flag_new ();
 
 	r_flag_space_set (flag, "sp1");
@@ -128,7 +128,7 @@ bool test_r_flag_get_at() {
 	mu_end;
 }
 
-int all_tests() {
+int all_tests(void) {
 	mu_run_test (test_r_flag_get_set);
 	mu_run_test (test_r_flag_by_spaces);
 	mu_run_test (test_r_flag_get_at);

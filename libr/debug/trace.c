@@ -53,7 +53,11 @@ R_API bool r_debug_trace_ins_before(RDebug *dbg) {
 	ut8 buf_pc[32];
 
 	// Analyze current instruction
-	ut64 pc = r_debug_reg_get (dbg, dbg->reg->name[R_REG_NAME_PC]);
+	const char *pcreg = r_reg_alias_getname (dbg->reg, R_REG_ALIAS_PC);
+	if (!pcreg) {
+		return false;
+	}
+	ut64 pc = r_debug_reg_get (dbg, pcreg);
 	if (!dbg->iob.read_at) {
 		return false;
 	}
@@ -174,8 +178,8 @@ R_API bool r_debug_trace_pc(RDebug *dbg, ut64 pc) {
 		R_LOG_ERROR ("trace_pc: cannot read memory at 0x%"PFMT64x, pc);
 		return false;
 	}
-	(void)dbg->iob.read_at (dbg->iob.io, pc, buf, sizeof (buf));
-	if (r_anal_op (dbg->anal, &op, pc, buf, sizeof (buf), R_ARCH_OP_MASK_ESIL) < 1) {
+	int res = dbg->iob.read_at (dbg->iob.io, pc, buf, sizeof (buf));
+	if (res > 0 && r_anal_op (dbg->anal, &op, pc, buf, sizeof (buf), R_ARCH_OP_MASK_ESIL) < 1) {
 		R_LOG_ERROR ("trace_pc: cannot get opcode size at 0x%"PFMT64x, pc);
 		return false;
 	}
@@ -256,13 +260,14 @@ static void r_debug_trace_list_quiet(RDebug *dbg) {
 }
 
 static inline void listinfo_fini(RListInfo *info) {
+	R_RETURN_IF_FAIL (info);
 	free (info->name);
 	free (info->extra);
 }
 
 R_VEC_TYPE_WITH_FINI (RVecListInfo, RListInfo, listinfo_fini);
 
-static void r_debug_trace_list_table(RDebug *dbg, ut64 offset) {
+static void r_debug_trace_list_table(RDebug *dbg, ut64 offset, RTable *t) {
 	RVecListInfo info_vec;
 	RVecListInfo_init (&info_vec);
 
@@ -288,12 +293,12 @@ static void r_debug_trace_list_table(RDebug *dbg, ut64 offset) {
 
 	if (flag) {
 		RVecListInfo_sort (&info_vec, cmpaddr);
-		RTable *table = r_table_new ("traces");
+		RTable *table = t? t: r_table_new ("traces");
 		table->cons = r_cons_singleton ();
 		RIO *io = dbg->iob.io;
 		r_table_visual_vec (table, &info_vec, offset, 1, r_cons_get_size (NULL), io->va);
 		char *s = r_table_tostring (table);
-		io->cb_printf ("\n%s\n", s);
+		io->cb_printf ("%s", s);
 		free (s);
 		r_table_free (table);
 	}
@@ -322,25 +327,25 @@ static void r_debug_trace_list_default(RDebug *dbg) {
 	}
 }
 
-R_API void r_debug_trace_list(RDebug *dbg, int mode, ut64 offset) {
+R_API void r_debug_trace_list(RDebug *dbg, int mode, ut64 offset, RTable *t) {
 	R_RETURN_IF_FAIL (dbg && dbg->trace);
 	switch (mode) {
-		case 'j':
-			r_debug_trace_list_json (dbg);
-			break;
-		case 'q':
-			r_debug_trace_list_quiet (dbg);
-			break;
-		case '=':
-			r_debug_trace_list_table (dbg, offset);
-			break;
-		case 1:
-		case '*':
-			r_debug_trace_list_make (dbg);
-			break;
-		default:
-			r_debug_trace_list_default (dbg);
-			break;
+	case 'j':
+		r_debug_trace_list_json (dbg);
+		break;
+	case 'q':
+		r_debug_trace_list_quiet (dbg);
+		break;
+	case '=':
+		r_debug_trace_list_table (dbg, offset, t);
+		break;
+	case 1:
+	case '*':
+		r_debug_trace_list_make (dbg);
+		break;
+	default:
+		r_debug_trace_list_default (dbg);
+		break;
 	}
 }
 
@@ -365,6 +370,11 @@ R_API RDebugTracepoint *r_debug_trace_add(RDebug *dbg, ut64 addr, int size) {
 	int last_times = 1;
 	RDebugTracepoint *last = r_debug_trace_get (dbg, addr);
 	if (last) {
+		RDebugTracepoint *endtp = RVecDebugTracepoint_last (dbg->trace->traces);
+		if (last == endtp) {
+			// avoid tracing the same instruction twice
+			return NULL;
+		}
 		last_times = last->times + 1;
 	}
 	int pos = RVecDebugTracepoint_length (dbg->trace->traces) + 1;

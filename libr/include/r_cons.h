@@ -58,8 +58,7 @@ extern "C" {
 #define CONS_PALETTE_SIZE 22
 #define CONS_COLORS_SIZE 21
 
-#define R_CONS_GREP_WORDS 10
-#define R_CONS_GREP_WORD_SIZE 64
+// R2_600 - remove more limits
 #define R_CONS_GREP_TOKENS 64
 #define R_CONS_GREP_COUNT 10
 
@@ -110,9 +109,15 @@ typedef struct {
 	const char *script;
 } RConsTheme;
 
+typedef struct r_cons_grep_word_t {
+	char *str;
+	bool neg;
+	bool begin;
+	bool end;
+} RConsGrepWord;
+
 typedef struct r_cons_grep_t {
-	char strings[R_CONS_GREP_WORDS][R_CONS_GREP_WORD_SIZE];
-	int nstrings;
+	RList *strings; // words
 	char *str;
 	int counter;
 	bool charCounter;
@@ -135,9 +140,6 @@ typedef struct r_cons_grep_t {
 	int amp;
 	int zoom;
 	int zoomy; // if set then its scaled unproportionally
-	int neg[R_CONS_GREP_WORDS];
-	int begin[R_CONS_GREP_WORDS];
-	int end[R_CONS_GREP_WORDS];
 	bool xml;
 	bool icase;
 	bool ascart;
@@ -794,7 +796,7 @@ typedef struct r_cons_canvas_line_style_t {
 #endif
 
 #ifdef R_API
-R_API void r_cons_image(const ut8 *buf, int bufsz, int width, int mode);
+R_API void r_cons_image(const ut8 *buf, int bufsz, int width, int mode, int components);
 R_API RConsCanvas* r_cons_canvas_new(int w, int h);
 R_API void r_cons_canvas_free(RConsCanvas *c);
 R_API void r_cons_canvas_clear(RConsCanvas *c);
@@ -1078,6 +1080,7 @@ typedef struct r_line_hist_t {
 	int top;
 	int autosave;
 	bool do_setup_match;
+	int load_index;
 } RLineHistory;
 
 typedef struct r_line_buffer_t {
@@ -1138,7 +1141,7 @@ struct r_line_t {
 	char *contents;
 	bool zerosep;
 	bool enable_vi_mode; // can be merged with vi_mode
-	int vi_mode;
+	int vi_mode; // TODO bool ?
 	bool prompt_mode;
 	RLinePromptType prompt_type;
 	int offset_hist_index;
@@ -1172,7 +1175,7 @@ R_API int r_line_hist_add(const char *line);
 R_API bool r_line_hist_save(const char *file);
 R_API int r_line_hist_label(const char *label, void(*cb)(const char*));
 R_API void r_line_label_show(void);
-R_API int r_line_hist_list(void);
+R_API int r_line_hist_list(bool full);
 R_API int r_line_hist_get_size(void);
 R_API void r_line_hist_set_size(int size);
 R_API const char *r_line_hist_get(int n);

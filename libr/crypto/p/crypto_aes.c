@@ -80,6 +80,7 @@ RCryptoPlugin r_crypto_plugin_aes = {
 	.type = R_CRYPTO_TYPE_ENCRYPT,
 	.meta = {
 		.name = "aes-ecb",
+		.desc = "Rijndael block cipher with Electronic Code Book mode",
 		.author = "pancake",
 		.license = "MIT",
 	},

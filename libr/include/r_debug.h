@@ -230,7 +230,7 @@ R_VEC_FORWARD_DECLARE (RVecDebugTracepoint);
 typedef struct r_debug_trace_t {
 	RVecDebugTracepoint *traces;
 	int count;
-	int enabled;
+	int enabled; // R2_600 bool?
 	int tag;
 	int dup;
 	char *addresses;
@@ -294,7 +294,7 @@ typedef struct r_debug_plugin_session_t RDebugPluginSession;
 typedef int (*RDebugCmdCb)(RDebug *dbg, const char *cmd);
 typedef struct r_debug_plugin_t {
 	RPluginMeta meta;
-	ut32 bits;
+	RSysBits bits;
 	const char *arch;
 	int canstep;
 	int keepio;
@@ -348,9 +348,9 @@ typedef struct r_debug_plugin_session_t {
 R_VEC_FORWARD_DECLARE (RVecDebugPluginSession);
 
 typedef struct r_debug_t {
-	// R2_590 use RArchConfig instead
+	// R2_600 use RArchConfig instead?
 	char *arch;
-	int bits; /// XXX: MUST SET ///
+	int bits; // only 16, 32, 64, .. not packed
 	int hitinfo;
 
 	int main_pid;
@@ -589,7 +589,7 @@ R_API bool r_debug_trace_pc(RDebug *dbg, ut64 pc);
 R_API void r_debug_trace_op(RDebug *dbg, RAnalOp *op);
 R_API void r_debug_trace_at(RDebug *dbg, const char *str);
 R_API RDebugTracepoint *r_debug_trace_get(RDebug *dbg, ut64 addr);
-R_API void r_debug_trace_list(RDebug *dbg, int mode, ut64 offset);
+R_API void r_debug_trace_list(RDebug *dbg, int mode, ut64 offset, RTable *t);
 R_API RDebugTracepoint *r_debug_trace_add(RDebug *dbg, ut64 addr, int size);
 R_API RDebugTrace *r_debug_trace_new(void);
 R_API void r_debug_trace_free(RDebugTrace *dbg);

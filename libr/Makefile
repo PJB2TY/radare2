@@ -36,7 +36,7 @@ endif
 
 ifeq ($(WITH_LIBR),1)
 
-ifeq ($(CC),emcc)
+ifneq (,$(findstring emcc,$(CC)))
 MLFLAGS=
 else
 ifeq ($(OSTYPE),darwin)
@@ -93,7 +93,7 @@ ifeq (1,1)
 		( cd .libr2/$$BN ; pwd ; du -hs ../../$$LIB; ${AR} -x ../../$$LIB ) ; \
 	done
 
-ifeq ($(shell uname),Darwin)
+ifeq ($(OSTYPE),darwin)
 WHOLEFLAG=-all_load
 else
 WHOLEFLAG=-Wl,--whole-archive
@@ -124,8 +124,8 @@ E+=../shlr/winkd/libr_winkd.${EXT_AR}
 E+=../shlr/qnx/lib/libqnxr.${EXT_AR}
 E+=../shlr/bochs/lib/libbochs.${EXT_AR}
 
-E+=../libr/arch/p/arm/v35/arm64dis.${EXT_AR}
-E+=../libr/arch/p/arm/v35/armv7dis.${EXT_AR}
+# E+=../libr/arch/p/arm/v35/v35arm64.${EXT_AR}
+# E+=../libr/arch/p/arm/v35/v35armv7.${EXT_AR}
 
 ifeq ($(USE_CAPSTONE),1)
 E+=$(CAPSTONE_LDFLAGS)
@@ -202,7 +202,7 @@ install-includes:
 		done ; \
 	done)
 	${INSTALL_DIR} "${DESTDIR}${INCLUDEDIR}/libr/sdb"
-	(cd ../shlr/sdb/include/sdb && for FILE in *.h ; do \
+	(cd ../subprojects/sdb/include/sdb && for FILE in *.h ; do \
 		${INSTALL_DATA} $$FILE "${DESTDIR}${INCLUDEDIR}/libr/sdb/$$FILE" ; \
 	done)
 	for a in r_util r_crypto r_anal ; do \
@@ -218,7 +218,7 @@ symstall install-symlink:
 		"${DESTDIR}${LIBDIR}/pkgconfig" \
 		"${DESTDIR}${LIBDIR}/radare2/${VERSION}" ; \
 	rm -rf "${DESTDIR}${INCLUDEDIR}/libr" && ln -fs "${PWD}/include" "${DESTDIR}${INCLUDEDIR}/libr" ; \
-	rm -rf "${DESTDIR}${INCLUDEDIR}/libr/sdb" && ln -fs "${PWD}/../shlr/sdb/include/sdb" "${DESTDIR}${INCLUDEDIR}/libr/sdb" ; \
+	rm -rf "${DESTDIR}${INCLUDEDIR}/libr/sdb" && ln -fs "${PWD}/../subprojects/sdb/include/sdb" "${DESTDIR}${INCLUDEDIR}/libr/sdb" ; \
 	$(MAKE) install-pkgconfig-symlink ; \
 	$(foreach lib,${LIBS}, \
 	  ln -fs "${PWD}/$(lib)/libr_$(lib).${EXT_SO}" \

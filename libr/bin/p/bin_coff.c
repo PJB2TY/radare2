@@ -1,4 +1,4 @@
-/* radare - LGPL - Copyright 2014-2023 - Fedor Sakharov */
+/* radare - LGPL - Copyright 2014-2024 - Fedor Sakharov */
 
 #include <r_bin.h>
 #include <sdb/ht_uu.h>
@@ -291,7 +291,7 @@ static void truncate_section(RBinSection *ptr, const struct r_bin_coff_obj *obj)
 	// file_end in [0,2^33) as both arguments in [0,2^32), thus no overflow.
 	if (R_UNLIKELY (file_start > obj->size)) {
 		R_LOG_WARN ("File range of section \"%s\" is fully out of bounds (%#" PRIx64 "..%#" PRIx64 "), but file size is %#" PRIx64 ")",
-			    ptr->name, file_start, file_end);
+			    ptr->name, file_start, file_end, obj->size);
 		ptr->size = 0;
 	} else if (R_UNLIKELY (file_end > obj->size)) {
 		R_LOG_WARN ("File range of section \"%s\" is partially out of bounds (%#" PRIx64 "..%#" PRIx64 "), but file size is %#" PRIx64 ")",
@@ -502,7 +502,7 @@ static ut16 _read_le16(RBin *rbin, ut64 addr) {
 #define BYTES_PER_IMP_RELOC		8
 
 static RList *_relocs_list(RBin *rbin, struct r_bin_coff_obj *bin, bool patch, ut64 imp_map) {
-	r_return_val_if_fail (bin, NULL);
+	R_RETURN_VAL_IF_FAIL (bin, NULL);
 	if (!bin->scn_hdrs) {
 		return NULL;
 	}
@@ -680,7 +680,7 @@ static RList *relocs(RBinFile *bf) {
 }
 
 static RList *patch_relocs(RBinFile *bf) {
-	r_return_val_if_fail (bf && bf->rbin && bf->rbin->iob.io && bf->rbin->iob.io->desc, NULL);
+	R_RETURN_VAL_IF_FAIL (bf && bf->rbin && bf->rbin->iob.io && bf->rbin->iob.io->desc, NULL);
 	RBin *b = bf->rbin;
 	RBinObject *bo = r_bin_cur_object (b);
 	RIO *io = bf->rbin->iob.io;
@@ -973,9 +973,11 @@ static bool check(RBinFile *bf, RBuffer *buf) {
 RBinPlugin r_bin_plugin_coff = {
 	.meta = {
 		.name = "coff",
+		.author = "Fedor Sakharov",
 		.desc = "COFF format r_bin plugin",
-		.license = "LGPL3",
+		.license = "LGPL-3.0-only",
 	},
+	.weak_guess = true,
 	.get_sdb = &get_sdb,
 	.load = &load,
 	.destroy = &destroy,

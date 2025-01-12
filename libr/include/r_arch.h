@@ -21,11 +21,12 @@ typedef enum {
 #define R_ARCH_INFO_INVOP_SIZE 2
 #define R_ARCH_INFO_CODE_ALIGN 4
 #define R_ARCH_INFO_DATA_ALIGN 8
-#define R_ARCH_INFO_DATA2_ALIGN 16
-#define R_ARCH_INFO_DATA4_ALIGN 32
-#define R_ARCH_INFO_DATA8_ALIGN 64
-#define R_ARCH_INFO_JMPMID 128
-#define R_ARCH_INFO_ISVM 256
+#define R_ARCH_INFO_FUNC_ALIGN 16
+#define R_ARCH_INFO_DATA2_ALIGN 32
+#define R_ARCH_INFO_DATA4_ALIGN 64
+#define R_ARCH_INFO_DATA8_ALIGN 128
+#define R_ARCH_INFO_JMPMID 256
+#define R_ARCH_INFO_ISVM 512
 
 #if 1
 // R2_600 - Old and Deprecated Names. keeping it for compat until 6.0
@@ -44,7 +45,7 @@ typedef enum {
 typedef struct r_arch_value_t {
 	RArchValueType type;
 	int access; // rename to `perm` and use R_PERM_R | _W | _X
-	int absolute; // if true, unsigned cast is used
+	bool absolute; // if true, unsigned cast is used
 	int memref; // is memory reference? which size? 1, 2 ,4, 8
 	ut64 base ; // numeric address
 	st64 delta; // numeric delta
@@ -253,7 +254,7 @@ R_API void r_arch_op_free(void *_op);
 #endif
 
 #if 1
-// R2_590 Deprecate!
+// R2_600 Deprecate! this is part of archconfig!
 R_API bool r_arch_set_endian(RArch *arch, ut32 endian);
 R_API bool r_arch_set_bits(RArch *arch, ut32 bits);
 R_API bool r_arch_set_arch(RArch *arch, char *archname);
@@ -312,6 +313,7 @@ extern const RArchPlugin r_arch_plugin_mcs96;
 extern const RArchPlugin r_arch_plugin_mips_cs;
 extern const RArchPlugin r_arch_plugin_mips_gnu;
 extern const RArchPlugin r_arch_plugin_msp430;
+extern const RArchPlugin r_arch_plugin_nds32;
 extern const RArchPlugin r_arch_plugin_nios2;
 extern const RArchPlugin r_arch_plugin_null;
 extern const RArchPlugin r_arch_plugin_or1k;
@@ -333,9 +335,11 @@ extern const RArchPlugin r_arch_plugin_sm5xx;
 extern const RArchPlugin r_arch_plugin_snes;
 extern const RArchPlugin r_arch_plugin_sparc_cs;
 extern const RArchPlugin r_arch_plugin_sparc_gnu;
+extern const RArchPlugin r_arch_plugin_stm8;
 extern const RArchPlugin r_arch_plugin_tms320;
 extern const RArchPlugin r_arch_plugin_tricore;
 extern const RArchPlugin r_arch_plugin_tricore_cs;
+extern const RArchPlugin r_arch_plugin_uxn;
 extern const RArchPlugin r_arch_plugin_v810;
 extern const RArchPlugin r_arch_plugin_v850;
 extern const RArchPlugin r_arch_plugin_vax;
@@ -345,11 +349,10 @@ extern const RArchPlugin r_arch_plugin_x86_cs;
 extern const RArchPlugin r_arch_plugin_x86_nasm;
 extern const RArchPlugin r_arch_plugin_x86_nz;
 extern const RArchPlugin r_arch_plugin_xap;
-extern const RArchPlugin r_arch_plugin_stm8;
 extern const RArchPlugin r_arch_plugin_xcore_cs;
 extern const RArchPlugin r_arch_plugin_xtensa;
 extern const RArchPlugin r_arch_plugin_z80;
-extern const RArchPlugin r_arch_plugin_nds32;
+extern const RArchPlugin r_arch_plugin_cosmac;
 
 #ifdef __cplusplus
 }

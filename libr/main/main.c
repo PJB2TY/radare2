@@ -13,6 +13,7 @@ static RMain foo[] = {
 	{ "rarun2", r_main_rarun2 },
 	{ "rasm2", r_main_rasm2 },
 	{ "ragg2", r_main_ragg2 },
+	{ "rapatch2", r_main_rapatch2 },
 	{ "rabin2", r_main_rabin2 },
 	{ "radare2", r_main_radare2 },
 	{ "r2", r_main_radare2 },
@@ -40,7 +41,7 @@ R_API void r_main_free(RMain *m) {
 }
 
 R_API int r_main_run(RMain *m, int argc, const char **argv) {
-	r_return_val_if_fail (m && m->main, -1);
+	R_RETURN_VAL_IF_FAIL (m && m->main, -1);
 	return m->main (argc, argv);
 }
 

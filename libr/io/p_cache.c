@@ -71,7 +71,7 @@ const ut64 cleanup_masks[] = {
 };
 
 static void pcache_kv_free(HtUPKv *kv) {
-	r_return_if_fail (kv);
+	R_RETURN_IF_FAIL (kv);
 	free (kv->value);
 }
 
@@ -296,7 +296,8 @@ static bool __desc_cache_commit_cb(void *user, const ut64 k, const void *v) {
 
 R_API bool r_io_desc_cache_commit(RIODesc *desc) {
 	RIODesc *current;
-	if (!desc || !(desc->perm & R_PERM_W) || !desc->io || !desc->io->files || !desc->io->p_cache) {
+	if (!desc || !(desc->perm & R_PERM_W) || !desc->io ||
+		!desc->io->files.data || !desc->io->p_cache) {
 		return false;
 	}
 	if (!desc->cache) {
@@ -355,7 +356,7 @@ R_API void r_io_desc_cache_fini(RIODesc *desc) {
 }
 
 R_API void r_io_desc_cache_fini_all(RIO *io) {
-	if (io && io->files) {
-		r_id_storage_foreach (io->files, __desc_fini_cb, NULL);
+	if (io && io->files.data) {
+		r_id_storage_foreach (&io->files, __desc_fini_cb, NULL);
 	}
 }

@@ -1770,7 +1770,7 @@ static RList *methods(RBinFile *bf) {
 }
 
 static RList *classes(RBinFile *bf) {
-	r_return_val_if_fail (bf && bf->bo && bf->bo->bin_obj, NULL);
+	R_RETURN_VAL_IF_FAIL (bf && bf->bo && bf->bo->bin_obj, NULL);
 	RBinDexObj *bin = (RBinDexObj*) bf->bo->bin_obj;
 	if (!bin->classes_list) {
 		dex_loadcode (bf);
@@ -2181,7 +2181,7 @@ RBinPlugin r_bin_plugin_dex = {
 	.meta = {
 		.name = "dex",
 		.desc = "dex format bin plugin",
-		.license = "LGPL3",
+		.license = "LGPL-3.0-only",
 	},
 	.destroy = &destroy,
 	.get_sdb = &get_sdb,

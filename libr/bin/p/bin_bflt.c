@@ -1,4 +1,4 @@
-/* radare - LGPL - Copyright 2016-2023 - Oscar Salvador */
+/* radare - LGPL - Copyright 2016-2024 - Oscar Salvador */
 
 #include <r_bin.h>
 #include <r_io.h>
@@ -38,7 +38,7 @@ static int search_old_relocation(struct reloc_struct_t *reloc_table, ut32 addr_t
 }
 
 static RList *patch_relocs(RBinFile *bf) {
-	r_return_val_if_fail (bf && bf->rbin && bf->rbin->iob.io, NULL);
+	R_RETURN_VAL_IF_FAIL (bf && bf->rbin && bf->rbin->iob.io, NULL);
 	struct r_bin_bflt_obj *bin = NULL;
 	RBin *b = bf->rbin;
 	RBinObject *obj = r_bin_cur_object (b);
@@ -264,7 +264,7 @@ RBinPlugin r_bin_plugin_bflt = {
 		.name = "bflt",
 		.author = "Oscar Salvador",
 		.desc = "bFLT format r_bin plugin",
-		.license = "LGPL3",
+		.license = "LGPL-3.0-only",
 	},
 	.load = &load,
 	.destroy = &destroy,

@@ -137,10 +137,12 @@ static bool end(RCryptoJob *cj, const ut8 *buf, int len) {
 }
 
 RCryptoPlugin r_crypto_plugin_aes_wrap = {
+	.type = R_CRYPTO_TYPE_ENCRYPT,
 	.meta = {
 		.name = "aes-wrap",
+		.desc = "Rijndael block cipher with Key Wrap Algorithm (RFC 3394)",
 		.author = "Sylvain Pelissier",
-		.license = "LGPL",
+		.license = "LGPL-3.0-only",
 	},
 	.set_key = aes_wrap_set_key,
 	.get_key_size = aes_wrap_get_key_size,
