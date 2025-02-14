@@ -179,7 +179,7 @@ static EDemanglerErr parse_microsoft_rtti_mangled_name(SDemangler *sd, const cha
 
 static const char *str_skip_report(const char *s, R_NULLABLE size_t *len, size_t n) {
 	size_t i;
-	r_return_val_if_fail (s, "");
+	R_RETURN_VAL_IF_FAIL (s, "");
 	for (i = 0; i < n && *s != 0; i++) {
 		s++;
 	}
@@ -639,8 +639,7 @@ get_template_err:
 	if (memorize) {
 		r_list_append (sd->abbr_names, strdup (type_code_str.type_str));
 	}
-	// will be free at a caller function
-	// free_type_code_str_struct(&type_code_str);
+	// XXX LEAK OR DOUBLE FREE free_type_code_str_struct (&type_code_str);
 	return len;
 }
 

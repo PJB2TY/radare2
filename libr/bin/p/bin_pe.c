@@ -104,7 +104,7 @@ static RBuffer* create(RBin* bin, const ut8 *code, int codelen, const ut8 *data,
 }
 
 static char *signature(RBinFile *bf, bool json) {
-	r_return_val_if_fail (bf && bf->bo && bf->bo->bin_obj, NULL);
+	R_RETURN_VAL_IF_FAIL (bf && bf->bo && bf->bo->bin_obj, NULL);
 	RBinPEObj *pe = PE_(get)(bf);
 	if (json) {
 		PJ *pj = r_pkcs7_cms_json (pe->cms);
@@ -437,7 +437,8 @@ RBinPlugin r_bin_plugin_pe = {
 	.meta = {
 		.name = "pe",
 		.desc = "PE bin plugin",
-		.license = "LGPL3",
+		.author = "pancake",
+		.license = "LGPL-3.0-only",
 	},
 	.get_sdb = &get_sdb,
 	.load = &load,
@@ -454,7 +455,7 @@ RBinPlugin r_bin_plugin_pe = {
 	.header = &header,
 	.fields = &fields,
 	.libs = &libs,
-	.relocs = &relocs,
+	.relocs = relocs,
 	.minstrlen = 4,
 	.create = &create,
 	.get_vaddr = &get_vaddr,

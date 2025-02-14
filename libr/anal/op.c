@@ -149,14 +149,18 @@ beach:
 
 // R2_590 data and len are contained inside RAnalOp. those args must disapear same for addr.. and then we get r_arch_op xD
 R_API int r_anal_op(RAnal *anal, RAnalOp *op, ut64 addr, const ut8 *data, int len, RAnalOpMask mask) {
-	r_return_val_if_fail (anal && op && len > 0, -1);
+	R_RETURN_VAL_IF_FAIL (anal && op && len > 0, -1);
 	r_anal_op_init (op);
-
+#if 0
+	if (len > 512) {
+		eprintf ("%d\n", len);
+	}
+#endif
 	// use core binding to set asm.bits correctly based on the addr
 	// this is because of the hassle of arm/thumb
 	// this causes the reg profile to be invalidated
-	if (anal && anal->coreb.archbits) {
-		anal->coreb.archbits (anal->coreb.core, addr);
+	if (anal && anal->coreb.archBits) {
+		anal->coreb.archBits (anal->coreb.core, addr);
 	}
 	const int codealign = anal->config->codealign;
 	if (codealign > 1 && (addr % codealign)) {
@@ -191,17 +195,6 @@ R_API int r_anal_op(RAnal *anal, RAnalOp *op, ut64 addr, const ut8 *data, int le
 		} else {
 			ret = op->size;
 		}
-#if 0
-		// r_arch_op_to_analop (op, &archop);
-		// ret = anal->arch->op (anal, op, addr, data, len, mask);
-		if (ret < 1) {
-			op->type = R_ANAL_OP_TYPE_ILL;
-			op->size = r_anal_archinfo (anal, R_ARCH_INFO_INVOP_SIZE);
-			if (op->size < 0) {
-				op->size = 1;
-			}
-		}
-#endif
 		op->addr = addr;
 		/* consider at least 1 byte to be part of the opcode */
 		if (op->nopcode < 1) {
@@ -226,7 +219,7 @@ R_API int r_anal_op(RAnal *anal, RAnalOp *op, ut64 addr, const ut8 *data, int le
 		ret = -1;
 		op->type = R_ANAL_OP_TYPE_ILL;
 		op->size = 1;
-		op->type = R_ANAL_OP_TYPE_MOV;
+		op->type = R_ANAL_OP_TYPE_MOV; // XXX ?
 		if (op->cycles == 0) {
 			op->cycles = defaultCycles (op);
 		}
@@ -416,19 +409,26 @@ R_API char *r_anal_op_tostring(RAnal *anal, RAnalOp *op) {
 	RAnalBlock *bb;
 	RAnalFunction *f;
 	char *cstr, ret[128];
-	RAnalValue *dst = r_vector_at (&op->dsts, 0);
-	RAnalValue *src0 = r_vector_at (&op->srcs, 0);
-	RAnalValue *src1 = r_vector_at (&op->srcs, 1);
-	char *r0 = r_anal_value_tostring (dst);
-	char *a0 = r_anal_value_tostring (src0);
-	char *a1 = r_anal_value_tostring (src1);
-	if (!r0) {
+	char *r0, *a0, *a1;
+	if (op->dsts.len || op->srcs.len) {
+		RAnalValue *dst = r_vector_at (&op->dsts, 0);
+		RAnalValue *src0 = r_vector_at (&op->srcs, 0);
+		RAnalValue *src1 = r_vector_at (&op->srcs, 1);
+		r0 = r_anal_value_tostring (dst);
+		a0 = r_anal_value_tostring (src0);
+		a1 = r_anal_value_tostring (src1);
+		if (!r0) {
+			r0 = strdup ("?");
+		}
+		if (!a0) {
+			a0 = strdup ("?");
+		}
+		if (!a1) {
+			a1 = strdup ("?");
+		}
+	} else {
 		r0 = strdup ("?");
-	}
-	if (!a0) {
 		a0 = strdup ("?");
-	}
-	if (!a1) {
 		a1 = strdup ("?");
 	}
 

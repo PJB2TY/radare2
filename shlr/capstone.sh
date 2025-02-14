@@ -1,4 +1,6 @@
 #!/bin/sh
+
+# TODO: Delete this file?
 CS_URL="$1" # url
 CS_BRA="$2" # branch name
 CS_TIP="$3" # tip commit
@@ -82,6 +84,7 @@ get_capstone() {
 }
 
 update_capstone_git() {
+	export PAGER=cat
 	cd capstone || fatal_msg 'Failed to chdir'
 	git checkout "${CS_BRA}" || fatal_msg "Cannot checkout to branch $CS_BRA"
 #	if [ -n "${CS_TIP}" ]; then

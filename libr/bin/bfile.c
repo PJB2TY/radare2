@@ -45,7 +45,7 @@ static void print_string(RBinFile *bf, RBinString *string, int raw, PJ *pj) {
 	const char *section_name = s ? s->name : "";
 	const char *type_string = r_bin_string_type (string->type);
 	ut64 vaddr = r_bin_get_vaddr (bin, string->paddr, string->vaddr);
-	ut64 addr = vaddr;
+	ut64 addr = vaddr; // bf->bo? vaddr: string->vaddr;
 
 	// If raw string dump mode, use printf to dump directly to stdout.
 	//  PrintfCallback temp = io->cb_printf;
@@ -161,8 +161,7 @@ static int string_scan_range(RList *list, RBinFile *bf, int min, const ut64 from
 			int outlen = len * 4;
 			ut8 *out = calloc (len, 4);
 			if (out) {
-				int res = r_charset_encode_str (ch, out, outlen, buf, len);
-				int i;
+				int i, res = r_charset_encode_str (ch, out, outlen, buf, len, false);
 				// TODO unknown chars should be translated to null bytes
 				for (i = 0; i < res; i++) {
 					if (out[i] == '?') {
@@ -213,7 +212,6 @@ static int string_scan_range(RList *list, RBinFile *bf, int min, const ut64 from
 				if (!addr_aligned) {
 					is_wide32le = false;
 				}
-				///is_wide32be &= (n1 < 0xff && n11 < 0xff); // false; // n11 < 0xff;
 				if (is_wide32le && addr_aligned) {
 					str_type = R_STRING_TYPE_WIDE32; // asume big endian,is there little endian w32?
 				} else {
@@ -222,11 +220,9 @@ static int string_scan_range(RList *list, RBinFile *bf, int min, const ut64 from
 					str_type = is_wide? R_STRING_TYPE_WIDE: R_STRING_TYPE_ASCII;
 				}
 			} else {
-				if (rc > 1) {
-					str_type = R_STRING_TYPE_UTF8; // could be charset if set :?
-				} else {
-					str_type = R_STRING_TYPE_ASCII;
-				}
+				str_type = (rc > 1)
+					? R_STRING_TYPE_UTF8
+					: R_STRING_TYPE_ASCII;
 			}
 		} else if (type == R_STRING_TYPE_UTF8) {
 			str_type = R_STRING_TYPE_ASCII; // initial assumption
@@ -319,7 +315,7 @@ static int string_scan_range(RList *list, RBinFile *bf, int min, const ut64 from
 			const char *tmpstr = r_strbuf_get (sb);
 			size_t tmplen = r_strbuf_length (sb);
 			// reduce false positives
-			int j, num_blocks, *block_list;
+			int j, num_blocks;
 			int *freq_list = NULL, expected_ascii, actual_ascii, num_chars;
 			if (str_type == R_STRING_TYPE_ASCII) {
 				for (j = 0; j < tmplen; j++) {
@@ -336,7 +332,7 @@ static int string_scan_range(RList *list, RBinFile *bf, int min, const ut64 from
 			case R_STRING_TYPE_WIDE:
 			case R_STRING_TYPE_WIDE32:
 				num_blocks = 0;
-				block_list = r_utf_block_list ((const ut8*)tmpstr, tmplen - 1,
+				int *block_list = r_utf_block_list ((const ut8*)tmpstr, tmplen - 1,
 						str_type == R_STRING_TYPE_WIDE? &freq_list: NULL);
 				if (block_list) {
 					for (j = 0; block_list[j] != -1; j++) {
@@ -357,11 +353,11 @@ static int string_scan_range(RList *list, RBinFile *bf, int min, const ut64 from
 					if (actual_ascii > expected_ascii) {
 						ascii_only = true;
 						needle = str_start;
-						free (block_list);
+						R_FREE (block_list);
 						continue;
 					}
 				}
-				free (block_list);
+				R_FREE (block_list);
 				if (num_blocks > R_STRING_MAX_UNI_BLOCKS) {
 					needle++;
 					continue;
@@ -377,6 +373,7 @@ static int string_scan_range(RList *list, RBinFile *bf, int min, const ut64 from
 			bs->ordinal = bf->string_count++;
 			if (limit > 0 && bf->string_count > limit) {
 				R_LOG_WARN ("el.limit for strings");
+				R_FREE (bs);
 				break;
 			}
 			// TODO: move into adjust_offset
@@ -410,8 +407,10 @@ static int string_scan_range(RList *list, RBinFile *bf, int min, const ut64 from
 				}
 			}
 			ut64 baddr = bf->loadaddr && bf->bo? bf->bo->baddr: bf->loadaddr;
+			// ut64 baddr = bf->bo? bf->bo->baddr: bf->loadaddr;
+			ut64 maddr = bf->bo? 0: bf->loadaddr;
+			bs->vaddr = str_start - pdelta + vdelta + baddr + maddr;
 			bs->paddr = str_start + baddr;
-			bs->vaddr = str_start - pdelta + vdelta + baddr;
 			bs->string = r_strbuf_drain (sb);
 			sb = r_strbuf_new ("");
 			if (strings_nofp) {
@@ -489,6 +488,11 @@ static void get_strings_range(RBinFile *bf, RList *list, int min, int raw, bool 
 				}
 			}
 		}
+		if (!bf->bo) {
+			// use laddr instead of baddr if no bin object is loaded
+			const ut64 binLaddr = cb->cfgGetI (cb->core, "bin.laddr");
+			bf->loadaddr = binLaddr;
+		}
 	}
 	if (raw != 2) {
 		ut64 size = to - from;
@@ -519,19 +523,20 @@ static void get_strings_range(RBinFile *bf, RList *list, int min, int raw, bool 
 	string_scan_range (list, bf, min, from, to, type, raw, section);
 }
 
-R_IPI RBinFile *r_bin_file_new(RBin *bin, const char *file, ut64 file_sz, int rawstr, int fd, const char *xtrname, Sdb *sdb, bool steal_ptr) {
+R_IPI RBinFile *r_bin_file_new(RBin *bin, const char *file, ut64 file_sz, RBinFileOptions *opt, Sdb *sdb, bool steal_ptr) {
 	ut32 bf_id;
 	if (!r_id_pool_grab_id (bin->ids->pool, &bf_id)) {
 		return NULL;
 	}
 	RBinFile *bf = R_NEW0 (RBinFile);
 	if (bf) {
+		bf->options = opt;
 		bf->id = bf_id;
 		bf->rbin = bin;
 		bf->file = file ? strdup (file) : NULL;
-		bf->rawstr = rawstr;
-		bf->fd = fd;
-		bf->curxtr = xtrname ? r_bin_get_xtrplugin_by_name (bin, xtrname) : NULL;
+		bf->rawstr = opt->rawstr;
+		bf->fd = opt->fd;
+		bf->curxtr = opt->pluginname? r_bin_get_xtrplugin_by_name (bin, opt->pluginname) : NULL;
 		bf->sdb = sdb;
 		if ((st64)file_sz < 0) {
 			file_sz = 1024 * 64;
@@ -616,16 +621,17 @@ static bool xtr_metadata_match(RBinXtrData *xtr_data, const char *arch, int bits
 	return bits == iter_bits && !strcmp (iter_arch, arch) && !xtr_data->loaded;
 }
 
-R_IPI RBinFile *r_bin_file_new_from_buffer(RBin *bin, const char *file, RBuffer *buf, int rawstr, ut64 baseaddr, ut64 loadaddr, int fd, const char *pluginname) {
+R_IPI RBinFile *r_bin_file_new_from_buffer(RBin *bin, const char *file, RBuffer *buf, RBinFileOptions *opt) {
+	// int rawstr, ut64 baseaddr, ut64 loadaddr, int fd, const char *pluginname) {
 	R_RETURN_VAL_IF_FAIL (bin && file && buf, NULL);
 
-	RBinFile *bf = r_bin_file_new (bin, file, r_buf_size (buf), rawstr, fd, pluginname, NULL, false);
+	RBinFile *bf = r_bin_file_new (bin, file, r_buf_size (buf), opt, NULL, false);
 	if (bf) {
 		RListIter *item = r_list_append (bin->binfiles, bf);
 		bf->buf = r_buf_ref (buf);
-		bf->user_baddr = baseaddr;
-		RBinPlugin *plugin = get_plugin_from_buffer (bin, bf, pluginname, bf->buf);
-		RBinObject *o = r_bin_object_new (bf, plugin, baseaddr, loadaddr, 0, r_buf_size (bf->buf));
+		bf->user_baddr = opt->baseaddr;
+		RBinPlugin *plugin = get_plugin_from_buffer (bin, bf, opt->pluginname, bf->buf);
+		RBinObject *o = r_bin_object_new (bf, plugin, opt->baseaddr, opt->loadaddr, 0, r_buf_size (bf->buf));
 		if (!o) {
 			r_list_delete (bin->binfiles, item);
 			return NULL;
@@ -832,7 +838,12 @@ R_IPI RBinFile *r_bin_file_xtr_load(RBin *bin, RBinXtrPlugin *xtr, const char *f
 
 	RBinFile *bf = r_bin_file_find_by_name (bin, filename);
 	if (!bf) {
-		bf = r_bin_file_new (bin, filename, r_buf_size (buf), rawstr, fd, xtr->meta.name, bin->sdb, false);
+		// XXX. str_load should take the RBinFileOptions instead
+		RBinFileOptions *opt = R_NEW0 (RBinFileOptions);
+		opt->rawstr = rawstr;
+		opt->fd = fd;
+		opt->pluginname = xtr->meta.name;
+		bf = r_bin_file_new (bin, filename, r_buf_size (buf), opt, bin->sdb, false);
 		if (!bf) {
 			return NULL;
 		}

@@ -1,8 +1,5 @@
-/* radare - LGPL - Copyright 2018-2022 - pancake */
+/* radare - LGPL - Copyright 2018-2024 - pancake */
 
-#include <r_types.h>
-#include <r_util.h>
-#include <r_lib.h>
 #include <r_bin.h>
 #include <sdb/ht_uu.h>
 #include "../i/private.h"
@@ -297,7 +294,7 @@ static bool load(RBinFile *bf, RBuffer *buf, ut64 loadaddr) {
 
 static RList *sections(RBinFile *bf) {
 	RList *res = r_list_newf ((RListFree)r_bin_section_free);
-	r_return_val_if_fail (res && bf->bo && bf->bo->bin_obj, res);
+	R_RETURN_VAL_IF_FAIL (res && bf->bo && bf->bo->bin_obj, res);
 	RCoreSymCacheElement *element = bf->bo->bin_obj;
 	size_t i;
 	if (element->segments) {
@@ -350,7 +347,7 @@ static bool check(RBinFile *bf, RBuffer *b) {
 }
 
 static RList *symbols(RBinFile *bf) {
-	r_return_val_if_fail (bf && bf->bo && bf->bo->bin_obj, NULL);
+	R_RETURN_VAL_IF_FAIL (bf && bf->bo && bf->bo->bin_obj, NULL);
 	RCoreSymCacheElement *element = bf->bo->bin_obj;
 	size_t i;
 	HtUU *hash = ht_uu_new0 ();
@@ -402,7 +399,7 @@ static void destroy(RBinFile *bf) {
 }
 
 static void header(RBinFile *bf) {
-	r_return_if_fail (bf && bf->bo);
+	R_RETURN_IF_FAIL (bf && bf->bo);
 
 	RCoreSymCacheElement *element = bf->bo->bin_obj;
 	if (!element) {
@@ -442,6 +439,7 @@ static void header(RBinFile *bf) {
 RBinPlugin r_bin_plugin_symbols = {
 	.meta = {
 		.name = "symbols",
+		.author = "pancake",
 		.desc = "Apple Symbols file",
 		.license = "MIT",
 	},

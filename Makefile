@@ -150,6 +150,8 @@ windist:
 	cp -f libr/arch/d/*.r2 "${WINDIST}/share/radare2/${VERSION}/platform"
 	mkdir -p "${WINDIST}/share/radare2/${VERSION}/opcodes"
 	cp -f libr/asm/d/*.sdb "${WINDIST}/share/radare2/${VERSION}/opcodes"
+	mkdir -p "${WINDIST}/share/radare2/${VERSION}/scripts"
+	cp -f scripts/*.js scripts/*.py "${WINDIST}/share/radare2/${VERSION}/scripts"
 	mkdir -p "${WINDIST}/share/radare2/${VERSION}/flag"
 	cp -f libr/flag/d/*.r2 "${WINDIST}/share/radare2/${VERSION}/flag"
 	mkdir -p "${WINDIST}/share/doc/radare2"
@@ -157,7 +159,7 @@ windist:
 	mkdir -p "${WINDIST}/include/libr/r_util"
 	mkdir -p "${WINDIST}/include/libr/r_anal"
 	@echo "${C}[WINDIST] Copying development files${R}"
-	cp -f shlr/sdb/include/*.h "${WINDIST}/include/libr/sdb/"
+	cp -f subprojects/sdb/include/*.h "${WINDIST}/include/libr/sdb/"
 	cp -f libr/include/r_util/*.h "${WINDIST}/include/libr/r_util/"
 	cp -f libr/include/r_anal/*.h "${WINDIST}/include/libr/r_anal/"
 	cp -f libr/include/*.h "${WINDIST}/include/libr"
@@ -194,6 +196,7 @@ clean:
 distclean mrproper: clean
 	rm -rf libr/arch/p/arm/v35/arch-arm*
 	rm -rf shlr/capstone
+	$(MAKE) -C subprojects clean 
 
 pkgcfg:
 	cd libr && ${MAKE} pkgcfg
@@ -235,6 +238,9 @@ install: install-doc install-man install-www install-pkgconfig
 	for DIR in ${DATADIRS} ; do $(MAKE) -C "$$DIR" install ; done
 	cd "$(DESTDIR)$(LIBDIR)/radare2/" && rm -f last && ln -fs $(VERSION) last
 	cd "$(DESTDIR)$(DATADIR)/radare2/" && rm -f last && ln -fs $(VERSION) last
+	rm -rf "${DESTDIR}${DATADIR}/radare2/${VERSION}/scripts"
+	mkdir -p "${DESTDIR}${DATADIR}/radare2/${VERSION}/scripts"
+	cp -rf scripts/*.js scripts/*.py "${DESTDIR}${DATADIR}/radare2/${VERSION}/scripts"
 	rm -rf "${DESTDIR}${DATADIR}/radare2/${VERSION}/hud"
 	mkdir -p "${DESTDIR}${DATADIR}/radare2/${VERSION}/hud"
 	mkdir -p "${DESTDIR}${BINDIR}"
@@ -242,6 +248,7 @@ install: install-doc install-man install-www install-pkgconfig
 	cp -f doc/hud "${DESTDIR}${DATADIR}/radare2/${VERSION}/hud/main"
 	mkdir -p "${DESTDIR}${DATADIR}/radare2/${VERSION}/"
 	$(SHELL) ./configure-plugins --rm-static $(DESTDIR)$(LIBDIR)/radare2/last/
+	cp -f subprojects/sdb/sdb "${DESTDIR}${BINDIR}/r2sdb"
 
 install-www:
 	rm -rf "${DESTDIR}${WWWROOT}"
@@ -280,6 +287,8 @@ symstall install-symlink: install-man-symlink install-doc-symlink install-pkgcon
 	cd shlr && ${MAKE} install-symlink
 	mkdir -p "${DESTDIR}${BINDIR}"
 	ln -fs "${PWD}/sys/indent.sh" "${DESTDIR}${BINDIR}/r2-indent"
+	rm -rf "${DESTDIR}${DATADIR}/radare2/${VERSION}/scripts"
+	ln -fs scripts "${DESTDIR}${DATADIR}/radare2/${VERSION}/scripts"
 	mkdir -p "${DESTDIR}${DATADIR}/radare2/${VERSION}/hud"
 	ln -fs "${PWD}/doc/hud" "${DESTDIR}${DATADIR}/radare2/${VERSION}/hud/main"
 	#mkdir -p "${DESTDIR}${DATADIR}/radare2/${VERSION}/flag"
@@ -311,16 +320,6 @@ user-wrap=echo "\#!/bin/sh" > ~/bin/"$1" \
 ; echo "${PWD}/env.sh '${PREFIX}' '$1' \"\$$@\"" >> ~/bin/"$1" \
 ; chmod +x ~/bin/"$1" ;
 
-user-install:
-	mkdir -p ~/bin
-	$(foreach mod,$(R2BINS),$(call user-wrap,$(mod)))
-	cd ~/bin ; ln -fs radare2 r2
-
-user-uninstall:
-	$(foreach mod,$(R2BINS),rm -f ~/bin/"$(mod)")
-	rm -f ~/bin/r2
-	-rmdir ~/bin
-
 purge-dev:
 	rm -f "${DESTDIR}${LIBDIR}/libr_"*".${EXT_AR}"
 	rm -f "${DESTDIR}${LIBDIR}/pkgconfig/r_"*.pc
@@ -338,7 +337,7 @@ else
 	-${STRIP} -s "${DESTDIR}${LIBDIR}/libr_"*".${EXT_SO}"
 endif
 
-purge: purge-doc purge-dev uninstall user-uninstall
+purge: purge-doc purge-dev uninstall
 	for FILE in ${R2BINS} ; do rm -f "${DESTDIR}${BINDIR}/$$FILE" ; done
 	rm -f "${DESTDIR}${BINDIR}/ragg2-cc"
 	rm -f "${DESTDIR}${BINDIR}/r2"
@@ -384,10 +383,6 @@ menu nconfig:
 	./sys/menu.sh || true
 
 include mk/meson.mk
-
-shlr/capstone:
-	$(MAKE) -C shlr capstone
-
 include ${MKPLUGINS}
 
 .PHONY: all clean install symstall uninstall deinstall strip

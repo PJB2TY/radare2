@@ -267,8 +267,10 @@ RBinPlugin r_bin_plugin_sfc = {
 	.meta = {
 		.name = "sfc",
 		.desc = "Super NES / Super Famicom ROM file",
-		.license = "LGPL3",
+		.author = "usrshare",
+		.license = "LGPL-3.0-only",
 	},
+	.weak_guess = true,
 	.load = &load,
 	.check = &check,
 	.entries = &entries,

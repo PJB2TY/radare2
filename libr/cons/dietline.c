@@ -1,11 +1,9 @@
-/* radare - LGPL - Copyright 2007-2023 - pancake */
+/* radare - LGPL - Copyright 2007-2024 - pancake */
 /* dietline is a lightweight and portable library similar to GNU readline */
 
 #include "r_util/r_str_util.h"
 #include <r_cons.h>
 #include <r_core.h>
-#include <string.h>
-#include <stdlib.h>
 
 #if R2__WINDOWS__
 #include <windows.h>
@@ -49,9 +47,9 @@ static inline bool is_word_break_char(char ch, BreakMode mode) {
 }
 
 static inline void swap_case(int index) {
-	if (IS_UPPER (I.buffer.data[index])) {
+	if (isupper (I.buffer.data[index])) {
 		I.buffer.data[index] += 32;
-	} else if (IS_LOWER (I.buffer.data[index])) {
+	} else if (islower (I.buffer.data[index])) {
 		I.buffer.data[index] -= 32;
 	}
 }
@@ -640,8 +638,7 @@ R_API int r_line_hist_cmd_down(RLine *line) {
 }
 
 // TODO argument can be "owned" so we can save some unnecessary free/malloc's
-// R2_600 - return bool instead of int
-R_API int r_line_hist_add(const char *line) {
+R_API bool r_line_hist_add(const char *line) {
 	if (R_STR_ISEMPTY (line)) {
 		return false;
 	}
@@ -705,11 +702,12 @@ R_API const char *r_line_hist_get(int n) {
 	return NULL;
 }
 
-R_API int r_line_hist_list(void) {
+R_API int r_line_hist_list(bool full) {
 	int i = 0;
 	inithist ();
 	if (I.history.data) {
-		for (i = 0; i < I.history.size && I.history.data[i]; i++) {
+		i = full? 0: I.history.load_index;
+		for (; i < I.history.size && I.history.data[i]; i++) {
 			const char *pad = r_str_pad (' ', 32 - strlen (I.history.data[i]));
 			r_cons_printf ("%s %s # !%d\n", I.history.data[i], pad, i);
 		}
@@ -731,8 +729,12 @@ R_API void r_line_hist_free(void) {
 
 /* load history from file. TODO: if file == NULL load from ~/.<prg>.history or so */
 R_API bool r_line_hist_load(const char *file) {
-	r_return_val_if_fail (file, false);
+	R_RETURN_VAL_IF_FAIL (file, false);
+	// R_LOG_DEBUG ("LOAD %s", file);
 	char *buf = calloc (1, R_LINE_BUFSIZE);
+	if (!buf) {
+		return false;
+	}
 	FILE *fd = r_sandbox_fopen (file, "rb");
 	if (!fd) {
 		free (buf);
@@ -746,13 +748,15 @@ R_API bool r_line_hist_load(const char *file) {
 		}
 		memset (buf, 0, R_LINE_BUFSIZE);
 	}
+	I.history.load_index = I.history.index;
 	fclose (fd);
 	free (buf);
 	return true;
 }
 
 R_API bool r_line_hist_save(const char *file) {
-	r_return_val_if_fail (file && *file, false);
+	R_RETURN_VAL_IF_FAIL (file && *file, false);
+	// R_LOG_DEBUG ("SAVE %s", file);
 	int i;
 	bool ret = false;
 	char *p = (char *) r_str_lastbut (file, R_SYS_DIR[0], NULL);
@@ -1152,7 +1156,7 @@ static void __print_prompt(void) {
 		r_cons_gotoxy (0, cons->rows);
 		r_cons_flush ();
 	}
-	printf ("%s", promptcolor ());
+	// printf ("%s", promptcolor ());
 	r_cons_clear_line (0);
 	if (cons->context->color_mode > 0) {
 		printf ("\r%s%s%s", Color_RESET, promptcolor (), I.prompt);
@@ -1358,9 +1362,9 @@ static inline void vi_delete_commands(int rep) {
 }
 
 static inline void __move_cursor_right(void) {
-	I.buffer.index = I.buffer.index < I.buffer.length - 1
+	I.buffer.index = I.buffer.index < I.buffer.length
 		? I.buffer.index + r_str_utf8_charsize (I.buffer.data + I.buffer.index)
-		: I.buffer.length - 1;
+		: I.buffer.length;
 }
 
 static inline void __move_cursor_left(void) {
@@ -1413,7 +1417,7 @@ static bool __vi_mode(void) {
 		bool o_do_setup_match = I.history.do_setup_match;
 		I.history.do_setup_match = true;
 		ch = r_cons_readchar ();
-		while (IS_DIGIT (ch)) {			// handle commands like 3b
+		while (isdigit (ch)) {			// handle commands like 3b
 			if (ch == '0' && rep == 0) {	// to handle the command 0
 				break;
 			}
@@ -2407,7 +2411,7 @@ _end:
 
 	// shouldnt be here
 	if (r_str_startswith (I.buffer.data, "!history")) {
-		r_line_hist_list ();
+		r_line_hist_list (true);
 		return "";
 	}
 	return I.buffer.data[0] != '\0'? I.buffer.data: "";

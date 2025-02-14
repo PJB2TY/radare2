@@ -1,4 +1,4 @@
-/* radare - LGPL - Copyright 2021 - pancake */
+/* radare - LGPL - Copyright 2021-2024 - pancake */
 
 // https://github.com/nesbox/TIC-80/wiki/tic-File-Format
 
@@ -7,7 +7,6 @@
 #include <r_lib.h>
 #include <r_bin.h>
 #include "../i/private.h"
-
 
 #define CHUNK_TILES	1 // BG sprites (0...255). This is copied to RAM at 0x4000...0x5FFF.
 #define CHUNK_SPRITES	2 // FG sprites (256...511). This is copied to RAM at 0x6000...0x7FFF.
@@ -65,7 +64,7 @@ static const char *chunk_name(int chunk_type) {
 }
 
 static bool check(RBinFile *bf, RBuffer *buf) {
-	r_return_val_if_fail (buf, false);
+	R_RETURN_VAL_IF_FAIL (buf, false);
 	if (bf && !r_str_endswith (bf->file, ".tic")) {
 		return false;
 	}
@@ -110,13 +109,13 @@ static bool check(RBinFile *bf, RBuffer *buf) {
 				chunk_name (chunk_type), chunk_length);
 			break;
 		default:
-			R_LOG_ERROR ("Invalid chunk at offset 0x%"PFMT64x, off);
+			R_LOG_DEBUG ("Invalid chunk at offset 0x%"PFMT64x, off);
 			return false;
 		}
 		// data
 		off += chunk_length;
 	}
-	// first 3 bytes can be anything!
+	// first 3 bytes can be anything! lots of false positives here
 	return true;
 }
 
@@ -291,9 +290,11 @@ static RList *entries(RBinFile *bf) {
 RBinPlugin r_bin_plugin_tic = {
 	.meta = {
 		.name = "tic",
+		.author = "pancake",
 		.desc = "TIC-80 cartridge parser",
 		.license = "MIT",
 	},
+	.weak_guess = true,
 	.load = &load,
 	.destroy = &destroy,
 	.check = &check,

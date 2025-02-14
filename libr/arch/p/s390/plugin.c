@@ -2,6 +2,7 @@
 
 #include <r_arch.h>
 #include <r_lib.h>
+#define CAPSTONE_SYSTEMZ_COMPAT_HEADER
 #include <capstone/capstone.h>
 #include <capstone/systemz.h>
 // instruction set: http://www.tachyonsoft.com/inst390m.htm
@@ -64,7 +65,7 @@ static char *mnemonics(RArchSession *s, int id, bool json) {
 }
 
 static bool init(RArchSession *s) {
-	r_return_val_if_fail (s, false);
+	R_RETURN_VAL_IF_FAIL (s, false);
 	if (s->data) {
 		R_LOG_WARN ("Already initialized");
 		return false;
@@ -234,6 +235,17 @@ static bool decode(RArchSession *a, RAnalOp *op, RArchDecodeMask mask) {
 	case SYSZ_INS_BRCTG:
 		op->type = R_ANAL_OP_TYPE_CJMP;
 		break;
+	case SYSZ_INS_CLRJLE:
+	// case SYSZ_INS_CLRJGE:
+	case SYSZ_INS_CLRJE:
+	case SYSZ_INS_CLRJNE:
+	case SYSZ_INS_CLRJNLE:
+	case SYSZ_INS_CLRJNLH:
+	case SYSZ_INS_CLRJHE:
+	case SYSZ_INS_CLRJL:
+	case SYSZ_INS_CLRJLH:
+	case SYSZ_INS_CLGIJLE:
+	case SYSZ_INS_CLGIJH:
 	case SYSZ_INS_CGIJE:
 	case SYSZ_INS_CGRJE:
 		op->type = R_ANAL_OP_TYPE_CJMP;
@@ -241,34 +253,36 @@ static bool decode(RArchSession *a, RAnalOp *op, RArchDecodeMask mask) {
 		op->fail = addr + op->size;
 		break;
 	case SYSZ_INS_JE:
+#if CS_NEXT_VERSION < 6
 	case SYSZ_INS_JGE:
-	case SYSZ_INS_JHE:
 	case SYSZ_INS_JGHE:
-	case SYSZ_INS_JH:
 	case SYSZ_INS_JGH:
-	case SYSZ_INS_JLE:
 	case SYSZ_INS_JGLE:
-	case SYSZ_INS_JLH:
 	case SYSZ_INS_JGLH:
-	case SYSZ_INS_JL:
 	case SYSZ_INS_JGL:
-	case SYSZ_INS_JNE:
 	case SYSZ_INS_JGNE:
-	case SYSZ_INS_JNHE:
 	case SYSZ_INS_JGNHE:
-	case SYSZ_INS_JNH:
 	case SYSZ_INS_JGNH:
-	case SYSZ_INS_JNLE:
 	case SYSZ_INS_JGNLE:
-	case SYSZ_INS_JNLH:
 	case SYSZ_INS_JGNLH:
-	case SYSZ_INS_JNL:
 	case SYSZ_INS_JGNL:
-	case SYSZ_INS_JNO:
 	case SYSZ_INS_JGNO:
-	case SYSZ_INS_JO:
 	case SYSZ_INS_JGO:
 	case SYSZ_INS_JG:
+#endif
+	case SYSZ_INS_JHE:
+	case SYSZ_INS_JH:
+	case SYSZ_INS_JLE:
+	case SYSZ_INS_JLH:
+	case SYSZ_INS_JL:
+	case SYSZ_INS_JNE:
+	case SYSZ_INS_JNHE:
+	case SYSZ_INS_JNH:
+	case SYSZ_INS_JNLE:
+	case SYSZ_INS_JNLH:
+	case SYSZ_INS_JNL:
+	case SYSZ_INS_JNO:
+	case SYSZ_INS_JO:
 		op->type = R_ANAL_OP_TYPE_CJMP;
 		op->jump = INSOP (0).imm;
 		op->fail = addr + op->size;
@@ -342,7 +356,7 @@ static int archinfo(RArchSession *as, ut32 q) {
 }
 
 static bool fini(RArchSession *s) {
-	r_return_val_if_fail (s, false);
+	R_RETURN_VAL_IF_FAIL (s, false);
 	CapstonePluginData *cpd = (CapstonePluginData*)s->data;
 	cs_close (&cpd->cs_handle);
 	R_FREE (s->data);
@@ -350,18 +364,19 @@ static bool fini(RArchSession *s) {
 }
 
 static RList *preludes(RArchSession *as) {
-	r_return_val_if_fail (as && as->config, NULL);
+	R_RETURN_VAL_IF_FAIL (as && as->config, NULL);
 	RList *l = r_list_newf (free);
 	r_list_append (l, strdup ("c010000104")); // imports -- some false positives
 	r_list_append (l, strdup ("eb6ff03000")); // stgm
 	return l;
 }
+
 const RArchPlugin r_arch_plugin_s390_cs = {
 	.meta = {
 		.name = "s390",
 		.desc = "Capstone SystemZ microanalysis",
 		.author = "pancake",
-		.license = "BSD",
+		.license = "Apache-2.0",
 	},
 	.arch = "s390",
 	.bits = R_SYS_BITS_PACK2 (32, 64), // it's actually 31

@@ -1,4 +1,4 @@
-/* radare2 - LGPL - Copyright 2017-2021 - pancake, cgvwzq */
+/* radare2 - MIT - Copyright 2017-2021 - pancake, cgvwzq */
 
 // http://webassembly.org/docs/binary-encoding/#module-structure
 
@@ -51,7 +51,7 @@ static inline RBinWasmExportEntry *find_export(RPVector *exports, ut8 kind, ut32
 }
 
 static bool load(RBinFile *bf, RBuffer *buf, ut64 loadaddr) {
-	r_return_val_if_fail (bf && buf && r_buf_size (buf) != UT64_MAX, false);
+	R_RETURN_VAL_IF_FAIL (bf && buf && r_buf_size (buf) != UT64_MAX, false);
 
 	if (check (bf, buf)) {
 		bf->bo->bin_obj = r_bin_wasm_init (bf, buf);
@@ -73,7 +73,7 @@ static RBinAddr *binsym(RBinFile *bf, int type) {
 }
 
 static RList *entries(RBinFile *bf) {
-	r_return_val_if_fail (bf && bf->bo && bf->bo->bin_obj, NULL);
+	R_RETURN_VAL_IF_FAIL (bf && bf->bo && bf->bo->bin_obj, NULL);
 	RBinWasmObj *bin = (RBinWasmObj *)bf->bo->bin_obj;
 	// TODO
 	ut64 addr = (ut64)r_bin_wasm_get_entrypoint (bin);
@@ -158,7 +158,7 @@ static const char *import_typename(ut32 kind) {
 	case R_BIN_WASM_EXTERNALKIND_Global:
 		return R_BIN_BIND_GLOBAL_STR;
 	default:
-		r_warn_if_reached ();
+		R_WARN_IF_REACHED ();
 		return NULL;
 	}
 }
@@ -311,7 +311,7 @@ static inline bool symbols_add_globals(RBinWasmObj *bin, RList *list) {
 }
 
 static RList *symbols(RBinFile *bf) {
-	r_return_val_if_fail (bf && bf->bo && bf->bo->bin_obj, NULL);
+	R_RETURN_VAL_IF_FAIL (bf && bf->bo && bf->bo->bin_obj, NULL);
 	RBinWasmObj *bin = bf->bo->bin_obj;
 	RList *ret = r_list_newf ((RListFree)free);
 	if (!ret) {
@@ -342,7 +342,7 @@ bad_alloc:
 }
 
 static RList *get_imports(RBinFile *bf) {
-	r_return_val_if_fail (bf && bf->bo && bf->bo->bin_obj, NULL);
+	R_RETURN_VAL_IF_FAIL (bf && bf->bo && bf->bo->bin_obj, NULL);
 	RBinWasmObj *bin = bf->bo->bin_obj;
 	RList *ret = r_list_newf ((RListFree)r_bin_import_free);
 	if (!ret) {
@@ -489,6 +489,7 @@ static const char *getname(RBinFile *bf, int type, int idx, bool sd) {
 RBinPlugin r_bin_plugin_wasm = {
 	.meta = {
 		.name = "wasm",
+		.author = "cgvwzq",
 		.desc = "WebAssembly bin plugin",
 		.license = "MIT",
 	},

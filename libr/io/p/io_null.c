@@ -1,4 +1,4 @@
-/* radare - LGPL - Copyright 2017-2023 - condret, pancake */
+/* radare - LGPL - Copyright 2017-2024 - condret, pancake */
 
 #include <r_io.h>
 #include <r_lib.h>
@@ -66,17 +66,17 @@ static ut64 __lseek(RIO* io, RIODesc* fd, ut64 offset, int whence) {
 	}
 	null = (RIONull*) fd->data;
 	switch (whence) {
-	case SEEK_SET:
+	case R_IO_SEEK_SET:
 		if (offset >= null->size) {
 			return null->offset = null->size - 1;
 		}
 		return null->offset = offset;
-	case SEEK_CUR:
+	case R_IO_SEEK_CUR:
 		if ((null->offset + offset) >= null->size) {
 			return null->offset = null->size - 1;
 		}
 		return null->offset += offset;
-	case SEEK_END:
+	case R_IO_SEEK_END:
 		return null->offset = null->size - 1;
 	}
 	return offset;
@@ -104,7 +104,8 @@ RIOPlugin r_io_plugin_null = {
 	.meta = {
 		.name = "null",
 		.desc = "Null plugin",
-		.license = "LGPL3",
+		.author = "condret",
+		.license = "LGPL-3.0-only",
 	},
 	.uris = "null://",
 	.open = __open,

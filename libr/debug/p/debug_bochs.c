@@ -1,6 +1,5 @@
-/* debugbochs  - LGPL - Copyright 2016-2023 - SkUaTeR */
+/* debugbochs  - LGPL - Copyright 2016-2024 - SkUaTeR */
 
-#include <r_asm.h>
 #include <r_debug.h>
 #include <libbochs.h>
 
@@ -577,7 +576,7 @@ static char *r_debug_bochs_reg_profile(RDebug *dbg) {
 }
 
 static bool init_plugin(RDebug *dbg, RDebugPluginSession *ds) {
-	r_return_val_if_fail (dbg && ds, false);
+	R_RETURN_VAL_IF_FAIL (dbg && ds, false);
 
 	PluginData *pd = R_NEW0 (PluginData);
 	if (!pd) {
@@ -591,7 +590,7 @@ static bool init_plugin(RDebug *dbg, RDebugPluginSession *ds) {
 }
 
 static bool fini_plugin(RDebug *dbg, RDebugPluginSession *ds) {
-	r_return_val_if_fail (dbg && ds, false);
+	R_RETURN_VAL_IF_FAIL (dbg && ds, false);
 
 	PluginData *pd = ds->plugin_data;
 	if (!pd) {
@@ -609,10 +608,10 @@ RDebugPlugin r_debug_plugin_bochs = {
 		.name = "bochs",
 		.author = "SkUaTeR",
 		.desc = "bochs debug plugin",
-		.license = "LGPL3",
+		.license = "LGPL-3.0-only",
 	},
 	.arch = "x86",
-	.bits = R_SYS_BITS_16 | R_SYS_BITS_32 | R_SYS_BITS_64,
+	.bits = R_SYS_BITS_PACK3 (16, 32, 64),
 	.init_plugin = init_plugin,
 	.fini_plugin = fini_plugin,
 	.step = r_debug_bochs_step,

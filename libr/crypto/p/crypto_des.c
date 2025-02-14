@@ -1,8 +1,6 @@
-/* radare - LGPL - Copyright 2017 - deroad */
+/* radare - LGPL - Copyright 2017-2024 - deroad */
 
-#include <r_lib.h>
 #include <r_crypto.h>
-#include <r_util.h>
 
 struct des_state {
 	ut32 keylo[16]; // round key low
@@ -55,7 +53,7 @@ static int des_encrypt(struct des_state *st, const ut8 *input, ut8 *output) {
 }
 
 static bool des_decrypt(struct des_state *st, const ut8 *input, ut8 *output) {
-	r_return_val_if_fail (st && input && output, false);
+	R_RETURN_VAL_IF_FAIL (st && input && output, false);
 	st->buflo = be32 (input + 0);
 	st->bufhi = be32 (input + 4);
 	//first permutation
@@ -169,10 +167,12 @@ static bool end(RCryptoJob *cj, const ut8 *buf, int len) {
 }
 
 RCryptoPlugin r_crypto_plugin_des = {
+	.type = R_CRYPTO_TYPE_ENCRYPT,
 	.meta = {
 		.name = "des-ecb",
 		.author = "deroad",
-		.license = "LGPL",
+		.desc = "DES with with Electronic Code Book mode",
+		.license = "LGPL-3.0-only",
 	},
 	.set_key = des_set_key,
 	.get_key_size = des_get_key_size,

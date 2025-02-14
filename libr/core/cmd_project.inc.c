@@ -84,7 +84,10 @@ static void r_core_project_zip_export(RCore *core, const char *prjname, const ch
 			char *zipfile = r_str_newf ("%s/%s.zrp", cwd, prj_name);
 			r_file_rm (zipfile);
 			// XXX use the ZIP api instead!
-			r_sys_cmdf ("zip -r %s %s", outzip? outzip: zipfile, prj_name);
+			const char *ofn = outzip? outzip: zipfile;
+			char *out = (*ofn == '/')? strdup (ofn): r_str_newf ("%s/%s", cwd, ofn);
+			r_sys_cmdf ("zip -r %s %s", out, prj_name);
+			free (out);
 			free (zipfile);
 		} else {
 			R_LOG_WARN ("Command injection attempt?");
@@ -102,10 +105,10 @@ static void cmd_Pz(RCore *core, const char *cmd) {
 		arg++;
 	}
 	switch (*cmd) {
-	case 'i':
+	case 'i': // "Pzi"
 		r_core_project_zip_import (core, arg);
 		break;
-	case 'e':
+	case 'e': // "Pze"
 	case ' ':
 		r_core_project_zip_export (core, NULL, arg);
 		break;
@@ -194,7 +197,7 @@ static int cmd_project(void *data, const char *input) {
 		}
 		break;
 	case 'z': // "Pz"
-		cmd_Pz (core, input + 1);
+		cmd_Pz (core, r_str_trim_head_ro (input + 1));
 		break;
 	case '+': // "P+"
 		// xxx
@@ -414,8 +417,11 @@ static int cmd_project(void *data, const char *input) {
 	case 'j': // "Pj"
 		r_core_project_list (core, input[0]);
 		break;
-	default:
+	case '?':
 		r_core_cmd_help (core, help_msg_P);
+		break;
+	default:
+		r_core_return_invalid_command (core, "P", *input);
 		break;
 	}
 	free (str);

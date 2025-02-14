@@ -1,7 +1,5 @@
-/* radare - LGPL - Copyright 2024 - pancake */
+/* radare - MIT - Copyright 2024 - pancake */
 
-#include <math.h>
-#include <r_lib.h>
 #include <r_crypto.h>
 
 static bool update(RCryptoJob *cj, const ut8 *buf, int len) {
@@ -50,10 +48,11 @@ static bool end(RCryptoJob *cj, const ut8 *buf, int len) {
 RCryptoPlugin r_crypto_plugin_entropy = {
 	.meta = {
 		.name = "entropy",
+		.desc = "Shannon entropy",
 		.author = "pancake",
 		.license = "MIT",
 	},
-	.type = R_CRYPTO_TYPE_HASHER,
+	.type = R_CRYPTO_TYPE_HASH,
 	.update = update,
 	.end = end
 };

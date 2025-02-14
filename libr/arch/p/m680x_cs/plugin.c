@@ -1,4 +1,4 @@
-/* radare2 - LGPL - Copyright 2015-2022 - pancake */
+/* radare2 - LGPL - Copyright 2015-2024 - pancake */
 
 #include <r_arch.h>
 #include <capstone/capstone.h>
@@ -62,7 +62,7 @@ static int m680xmode(const char *str) {
 #define REL(x) insn->detail->m680x.operands[x].rel
 
 static inline csh cs_handle_for_session (RArchSession *as) {
-	r_return_val_if_fail (as && as->data, 0);
+	R_RETURN_VAL_IF_FAIL (as && as->data, 0);
 	CapstonePluginData *pd = as->data;
 	return pd->cs_handle;
 }
@@ -648,7 +648,7 @@ static char *regs(RArchSession *as) {
 }
 
 static bool init(RArchSession *as) {
-	r_return_val_if_fail (as, false);
+	R_RETURN_VAL_IF_FAIL (as, false);
 	if (as->data) {
 		R_LOG_WARN ("Already initialized");
 		return false;
@@ -664,7 +664,7 @@ static bool init(RArchSession *as) {
 }
 
 static bool fini(RArchSession *s) {
-	r_return_val_if_fail (s, false);
+	R_RETURN_VAL_IF_FAIL (s, false);
 	CapstonePluginData *cpd = (CapstonePluginData*)s->data;
 	cs_close (&cpd->cs_handle);
 	R_FREE (s->data);
@@ -679,8 +679,8 @@ static char *mnemonics(RArchSession *as, int id, bool json) {
 const RArchPlugin r_arch_plugin_m680x_cs = {
 	.meta = {
 		.name = "m680x",
-		.desc = "Capstone M680X analysis plugin",
-		.license = "BSD",
+		.desc = "Capstone M680X",
+		.license = "Apache-2.0",
 	},
 	.arch = "m680x",
 	.cpus = "6800,6801,6805,6808,6809,6811,6301,6309,cpu12,hcs08",
@@ -696,8 +696,8 @@ const RArchPlugin r_arch_plugin_m680x_cs = {
 const RArchPlugin r_anal_plugin_m680x_cs = {
 	.meta = {
 		.name = "m680x (unsupported)",
-		.desc = "Capstone M680X analyzer (unsupported)",
-		.license = "BSD",
+		.desc = "Capstone M680X (unsupported)",
+		.license = "Apache-2.0",
 	},
 	.arch = "m680x",
 	.bits = R_SYS_BITS_PACK1 (32),
