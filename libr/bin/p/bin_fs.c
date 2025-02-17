@@ -40,7 +40,7 @@ static char *fsname(RBuffer *b) {
 }
 
 static bool check(RBinFile *bf, RBuffer *b) {
-	r_return_val_if_fail (b, false);
+	R_RETURN_VAL_IF_FAIL (b, false);
 	char *p = fsname (b);
 	bool hasFs = p;
 	free (p);
@@ -61,7 +61,7 @@ static RList *strings(RBinFile *bf) {
 }
 
 static RBinInfo* info(RBinFile *bf) {
-	r_return_val_if_fail (bf, NULL);
+	R_RETURN_VAL_IF_FAIL (bf, NULL);
 	RBinInfo *ret = R_NEW0 (RBinInfo);
 	if (ret) {
 		ret->file = bf->file? strdup (bf->file): NULL;
@@ -86,7 +86,7 @@ RBinPlugin r_bin_plugin_fs = {
 		.desc = "filesystem bin plugin",
 		.author = "pancake",
 		.version = "1.0",
-		.license = "LGPL3",
+		.license = "LGPL-3.0-only",
 	},
 	.load = &load,
 	.destroy = &destroy,

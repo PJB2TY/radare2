@@ -1,4 +1,4 @@
-/* radare - LGPL - Copyright 2016-2023 - oddcoder, sivaramaaa, pancake */
+/* radare - LGPL - Copyright 2016-2024 - oddcoder, sivaramaaa, pancake */
 /* type matching - type propagation */
 
 #include <r_core.h>
@@ -92,7 +92,7 @@ static const char *etrace_regwrite(REsilTrace *etrace, ut32 idx) {
 /// END ///////////////////// esil trace helpers ///////////////////////
 
 static bool anal_emul_init(RCore *core, RConfigHold *hc, RDebugTrace **dt, REsilTrace **et) {
-	r_return_val_if_fail (core && core->anal && core->anal->esil, false);
+	R_RETURN_VAL_IF_FAIL (core && core->anal && core->anal->esil, false);
 	*dt = core->dbg->trace;
 	*et = core->anal->esil->trace;
 	core->dbg->trace = r_debug_trace_new ();
@@ -102,9 +102,7 @@ static bool anal_emul_init(RCore *core, RConfigHold *hc, RDebugTrace **dt, REsil
 	r_config_set_b (core->config, "dbg.trace", true);
 	r_config_set_b (core->config, "esil.nonull", true);
 	r_config_set_i (core->config, "dbg.follow", 0);
-	const char *bp = r_reg_get_name (core->anal->reg, R_REG_NAME_BP);
-	const char *sp = r_reg_get_name (core->anal->reg, R_REG_NAME_SP);
-	if ((bp && !r_reg_getv (core->anal->reg, bp)) && (sp && !r_reg_getv (core->anal->reg, sp))) {
+	if (!r_reg_getv (core->anal->reg, "BP") && !r_reg_getv (core->anal->reg, "SP")) {
 		R_LOG_WARN ("The virtual stack is not yet available. Run aeim or aei and try again");
 		return false;
 	}
@@ -122,7 +120,7 @@ static void anal_emul_restore(RCore *core, RConfigHold *hc, RDebugTrace *dt, REs
 
 static bool etrace_regwrite_contains(REsilTrace *etrace, ut32 idx, const char *rname) {
 	DD eprintf ("regwrite contains %d %s\n", idx, rname);
-	r_return_val_if_fail (etrace && rname, false);
+	R_RETURN_VAL_IF_FAIL (etrace && rname, false);
 	REsilTraceOp *op = RVecTraceOp_at (&etrace->db.ops, idx); // AAA + 1);
 	if (op && op->start != op->end) {
 		REsilTraceAccess *start = RVecAccess_at (&etrace->db.accesses, op->start);
@@ -143,8 +141,7 @@ static bool type_pos_hit(RAnal *anal, bool in_stack, int idx, int size, const ch
 	DD eprintf ("TYpe pos hit %d %d %d %s\n", in_stack, idx, size, place);
 	REsilTrace *etrace = anal->esil->trace;
 	if (in_stack) {
-		const char *sp_name = r_reg_get_name (anal->reg, R_REG_NAME_SP); // XXX this is slow and we can cache
-		ut64 sp = r_reg_getv (anal->reg, sp_name); // XXX this is slow too and we can cache
+		ut64 sp = r_reg_getv (anal->reg, "SP"); // XXX this is slow too and we can cache
 		const ut64 write_addr = etrace_memwrite_addr (etrace, idx); // AAA -1
 		return (write_addr == sp + size);
 	}
@@ -176,7 +173,7 @@ static void var_rename(RAnal *anal, RAnalVar *v, const char *name, ut64 addr) {
 
 static void var_retype(RAnal *anal, RAnalVar *var, const char *vname, const char *type, bool ref, bool pfx) {
 	DD eprintf ("Var retype %s %s\n", var->name, type);
-	r_return_if_fail (anal && var && type);
+	R_RETURN_IF_FAIL (anal && var && type);
 	// XXX types should be passed without spaces to trim
 	type = r_str_trim_head_ro (type);
 	// default type if none is provided
@@ -249,7 +246,7 @@ static void var_retype(RAnal *anal, RAnalVar *var, const char *vname, const char
 
 static void get_src_regname(RCore *core, ut64 addr, char *regname, int size) {
 	DD eprintf ("getsrcregname 0x%"PFMT64x" %s %d\n", addr, regname, size);
-	r_return_if_fail (core && regname && size > 0);
+	R_RETURN_IF_FAIL (core && regname && size > 0);
 	RAnal *anal = core->anal;
 	regname[0] = 0;
 	RAnalOp *op = r_core_anal_op (core, addr, R_ARCH_OP_MASK_VAL | R_ARCH_OP_MASK_ESIL);
@@ -291,24 +288,24 @@ static ut64 get_addr(REsilTrace *etrace, const char *regname, int idx) {
 	return etrace_regread_value (etrace, idx, regname);
 }
 
-static _RAnalCond cond_invert(RAnal *anal, _RAnalCond cond) {
+static RAnalCondType cond_invert(RAnal *anal, RAnalCondType cond) {
 	switch (cond) {
-	case R_ANAL_COND_LE:
-		return R_ANAL_COND_GT;
-	case R_ANAL_COND_LT:
-		return R_ANAL_COND_GE;
-	case R_ANAL_COND_GE:
-		return R_ANAL_COND_LT;
-	case R_ANAL_COND_GT:
-		return R_ANAL_COND_LE;
-	case R_ANAL_COND_AL:
-		return R_ANAL_COND_NV;
-	case R_ANAL_COND_NV:
-		return R_ANAL_COND_AL;
-	case R_ANAL_COND_EQ:
-		return R_ANAL_COND_NE;
-	case R_ANAL_COND_NE:
-		return R_ANAL_COND_EQ;
+	case R_ANAL_CONDTYPE_LE:
+		return R_ANAL_CONDTYPE_GT;
+	case R_ANAL_CONDTYPE_LT:
+		return R_ANAL_CONDTYPE_GE;
+	case R_ANAL_CONDTYPE_GE:
+		return R_ANAL_CONDTYPE_LT;
+	case R_ANAL_CONDTYPE_GT:
+		return R_ANAL_CONDTYPE_LE;
+	case R_ANAL_CONDTYPE_AL:
+		return R_ANAL_CONDTYPE_NV;
+	case R_ANAL_CONDTYPE_NV:
+		return R_ANAL_CONDTYPE_AL;
+	case R_ANAL_CONDTYPE_EQ:
+		return R_ANAL_CONDTYPE_NE;
+	case R_ANAL_CONDTYPE_NE:
+		return R_ANAL_CONDTYPE_EQ;
 	default:
 		R_LOG_WARN ("unhandled condition for swapping %d", cond);
 		break;
@@ -333,7 +330,7 @@ static bool parse_format(RCore *core, const char *fmt, RVecString *vec) {
 	while (ptr) {
 		ptr++;
 		// strip [width] specifier
-		while (IS_DIGIT (*ptr)) {
+		while (isdigit (*ptr)) {
 			ptr++;
 		}
 		r_str_ncpy (arr, ptr, sizeof (arr) - 1);
@@ -402,7 +399,7 @@ static void retype_callee_arg(RAnal *anal, const char *callee_name, bool in_stac
  */
 static void type_match(RCore *core, char *fcn_name, ut64 addr, ut64 baddr, const char* cc,
 		int prev_idx, bool userfnc, ut64 caddr) {
-	r_return_if_fail (core && core->anal->esil && core->anal->esil->trace && fcn_name);
+	R_RETURN_IF_FAIL (core && core->anal->esil && core->anal->esil->trace && fcn_name);
 	RAnal *anal = core->anal;
 	REsilTrace *etrace = anal->esil->trace;
 	Sdb *TDB = anal->sdb_types;
@@ -455,7 +452,7 @@ static void type_match(RCore *core, char *fcn_name, ut64 addr, ut64 baddr, const
 				break;
 			}
 			const String *type_ = RVecString_at (&types, pos++);
-			type = type_ ? r_str_new (*type_) : NULL;
+			type = type_ ? R_STR_DUP (*type_) : NULL;
 			DD R_LOG_INFO ("TYPE (%s)", type);
 		} else {
 			type = r_type_func_args_type (TDB, fcn_name, arg_num);
@@ -514,7 +511,7 @@ static void type_match(RCore *core, char *fcn_name, ut64 addr, ut64 baddr, const
 					free (ms);
 					cmt_set = true;
 					if ((op->ptr && op->ptr != UT64_MAX) && !strcmp (name, "format")) {
-						RFlagItem *f = r_flag_get_by_spaces (core->flags, op->ptr, R_FLAGS_FS_STRINGS, NULL);
+						RFlagItem *f = r_flag_get_by_spaces (core->flags, false, op->ptr, R_FLAGS_FS_STRINGS, NULL);
 						if (f) {
 							char formatstr[0x200];
 							int read = r_io_nread_at (core->io, f->offset, (ut8 *)formatstr, R_MIN (sizeof (formatstr) - 1, f->size));
@@ -600,7 +597,7 @@ static int bb_cmpaddr(const void *_a, const void *_b) {
 }
 
 R_API void r_core_anal_type_match(RCore *core, RAnalFunction *fcn) {
-	r_return_if_fail (core && core->anal && fcn);
+	R_RETURN_IF_FAIL (core && core->anal && fcn);
 
 	const int op_tions = R_ARCH_OP_MASK_BASIC | R_ARCH_OP_MASK_VAL | R_ARCH_OP_MASK_ESIL | R_ARCH_OP_MASK_HINT;
 	RAnalBlock *bb;
@@ -610,6 +607,7 @@ R_API void r_core_anal_type_match(RCore *core, RAnalFunction *fcn) {
 	RAnal *anal = core->anal;
 	Sdb *TDB = anal->sdb_types;
 	int ret;
+	const bool breakoninvalid = r_config_get_b (core->config, "esil.breakoninvalid");
 	const bool chk_constraint = r_config_get_b (core->config, "anal.types.constraint");
 	const int mininstrsz = r_anal_archinfo (anal, R_ARCH_INFO_MINOP_SIZE);
 	const int minopcode = R_MAX (1, mininstrsz);
@@ -640,12 +638,6 @@ R_API void r_core_anal_type_match(RCore *core, RAnalFunction *fcn) {
 	char prev_type[256] = {0};
 	const char *prev_dest = NULL;
 	char *ret_reg = NULL;
-	const char *_pc = r_reg_get_name (core->dbg->reg, R_REG_NAME_PC);
-	if (!_pc) {
-		anal_emul_restore (core, hc, dt, et);
-		return;
-	}
-	char *pc = strdup (_pc);
 	r_cons_break_push (NULL, NULL);
 	RVecBuf buf;
 	RVecBuf_init (&buf);
@@ -656,7 +648,6 @@ R_API void r_core_anal_type_match(RCore *core, RAnalFunction *fcn) {
 repeat:
 	if (retries < 0) {
 		anal_emul_restore (core, hc, dt, et);
-		free (pc);
 		return;
 	}
 	RVecUT64_clear (&bblist);
@@ -666,7 +657,8 @@ repeat:
 	r_list_foreach (fcn->bbs, it, bb) {
 		RVecUT64_push_back (&bblist, &bb->addr);
 	}
-	int j;
+	int i, j;
+	r_config_set_b (core->config, "dbg.trace.eval", false);
 	for (j = 0; j < bblist_size; j++) {
 		REsilTrace *etrace = core->anal->esil->trace;
 		{
@@ -690,16 +682,12 @@ repeat:
 		if (r_io_read_at (core->io, addr, buf_ptr, bb_size) < 1) {
 			break;
 		}
-		int i = 0;
-		r_reg_setv (core->dbg->reg, pc, addr);
+		r_reg_setv (core->dbg->reg, "PC", addr);
 		for (i = 0; i < bb_size;) {
 			if (r_cons_is_breaked ()) {
 				goto out_function;
 			}
-			if (i >= bb_size) {
-				break;
-			}
-			ut64 pcval = r_reg_getv (anal->reg, pc);
+			ut64 pcval = r_reg_getv (anal->reg, "PC");
 			D eprintf ("---> 0x%"PFMT64x"\n", addr);
 			if ((addr >= bb_addr + bb_size) || (addr < bb_addr) || pcval != addr) {
 				// stop emulating this bb if pc is outside the basic block boundaries
@@ -711,7 +699,7 @@ repeat:
 				DD eprintf ("FAIL\n");
 				i += minopcode;
 				addr += minopcode;
-				r_reg_setv (core->dbg->reg, pc, addr);
+				r_reg_setv (core->dbg->reg, "PC", addr);
 				r_anal_op_fini (&aop);
 				continue;
 			}
@@ -725,10 +713,16 @@ repeat:
 #endif
 			r_esil_trace_loopcount_increment (etrace, addr);
 			if (r_anal_op_nonlinear (aop.type)) { // skip jmp/cjmp/trap/ret/call ops
-				r_reg_setv (core->dbg->reg, pc, addr + aop.size); // + ret
+				// eprintf ("%x nonlinear\n", pcval);
+				r_reg_setv (core->dbg->reg, "PC", addr + aop.size); // + ret
 			} else {
 				// eprintf ("STEP 0x%"PFMT64x"\n", addr);
-				r_core_esil_step (core, UT64_MAX, NULL, NULL, false);
+				int res = r_core_esil_step (core, UT64_MAX, NULL, NULL, false);
+				if (breakoninvalid && !res) {
+					R_LOG_ERROR ("step failed at 0x%08"PFMT64x, addr);
+					retries--;
+					goto repeat;
+				}
 			}
 #if 1
 			// XXX this code looks wrong and slow maybe is not needed
@@ -742,10 +736,11 @@ repeat:
 				}
 			}
 #endif
-
 			bool userfnc = false;
 			cur_idx = etrace_index (etrace) - 1;
-			if (cur_idx < 0) cur_idx = 0;
+			if (cur_idx < 0) {
+				cur_idx = 0;
+			}
 			anal->esil->trace->cur_idx = etrace_index (etrace);
 			RAnalVar *var = r_anal_get_used_function_var (anal, aop.addr);
 			DD eprintf ("CUR IDX %d %s\n", cur_idx, var?var->name:"");
@@ -764,7 +759,7 @@ repeat:
 						callee_addr = fcn_call->addr;
 					}
 				} else if (aop.ptr != UT64_MAX) {
-					RFlagItem *flag = r_flag_get_by_spaces (core->flags, aop.ptr, R_FLAGS_FS_IMPORTS, NULL);
+					RFlagItem *flag = r_flag_get_by_spaces (core->flags, false, aop.ptr, R_FLAGS_FS_IMPORTS, NULL);
 					if (flag && flag->realname) {
 						full_name = flag->realname;
 						callee_addr = aop.ptr;
@@ -941,7 +936,7 @@ repeat:
 						r_io_read_at (core->io, aop.ptr, sbuf, sizeof (sbuf) - 1);
 						ut64 ptr = r_read_ble (sbuf, be, aop.refptr * 8);
 						if (ptr && ptr != UT64_MAX) {
-							RFlagItem *f = r_flag_get_by_spaces (core->flags, ptr, R_FLAGS_FS_STRINGS, NULL);
+							RFlagItem *f = r_flag_get_by_spaces (core->flags, false, ptr, R_FLAGS_FS_STRINGS, NULL);
 							if (f) {
 								str_flag = true;
 							}
@@ -968,6 +963,7 @@ repeat:
 			r_anal_op_fini (&aop);
 		}
 	}
+	r_config_set_b (core->config, "dbg.trace.eval", true);
 	RVecBuf_fini (&buf);
 	RVecUT64_fini (&bblist);
 
@@ -978,10 +974,7 @@ repeat:
 	r_list_foreach (list, iter, rvar) {
 		RAnalVar *lvar = r_anal_var_get_dst_var (rvar);
 		RRegItem *i = r_reg_index_get (anal->reg, rvar->delta);
-		if (!i) {
-			continue;
-		}
-		if (lvar) {
+		if (i && lvar) {
 			// Propagate local var type = to => register-based var
 			var_retype (anal, rvar, NULL, lvar->type, false, false);
 			// Propagate local var type <= from = register-based var
@@ -998,5 +991,4 @@ out_function:
 	RVecBuf_fini (&buf);
 	RVecUT64_fini (&bblist);
 	anal_emul_restore (core, hc, dt, et);
-	free (pc);
 }

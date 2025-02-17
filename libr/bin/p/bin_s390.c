@@ -379,9 +379,10 @@ RBinPlugin r_bin_plugin_s390 = {
 	.meta = {
 		.name = "s390",
 		.desc = "s390 Load Module parser",
-		.license = "LGPL3",
+		.license = "LGPL-3.0-only",
 		.author = "Jose Antonio Romero",
 	},
+	.weak_guess = true,
 	.load = &load,
 	.check = &check,
 	.baddr = &baddr,

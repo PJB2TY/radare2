@@ -1,4 +1,4 @@
-/* radare - LGPL - Copyright 2011-2023 - pancake */
+/* radare - LGPL - Copyright 2011-2024 - pancake */
 
 #include <r_core.h>
 
@@ -16,12 +16,12 @@ R_API bool r_core_patch_line(RCore *core, char *str) {
 		if (q) {
 			*q = 0;
 		}
-		r_core_cmdf (core, "\"\"s %s", str);
-		r_core_cmdf (core, "\"\"w %s", p+1);
+		r_core_cmdf (core, "'s %s", str);
+		r_core_cmdf (core, "'w %s", p+1);
 		break;
 	case ':':
-		r_core_cmdf (core, "\"\"s %s", str);
-		r_core_cmdf (core, "\"\"wa %s", p);
+		r_core_cmdf (core, "'s %s", str);
+		r_core_cmdf (core, "'wa %s", p);
 		break;
 	case 'v':
 		q = strchr (p + 1, ' ');
@@ -31,12 +31,12 @@ R_API bool r_core_patch_line(RCore *core, char *str) {
 		} else {
 			return 0;
 		}
-		r_core_cmdf (core, "\"\"s %s", str);
-		r_core_cmdf (core, "\"\"wv%s %s", p + 1, q);
+		r_core_cmdf (core, "'s %s", str);
+		r_core_cmdf (core, "'wv%s %s", p + 1, q);
 		break;
 	default:
-		r_core_cmdf (core, "\"\"s %s", str);
-		r_core_cmdf (core, "\"\"wx %s", p);
+		r_core_cmdf (core, "'s %s", str);
+		r_core_cmdf (core, "'wx %s", p);
 		break;
 	}
 	return true;
@@ -101,13 +101,13 @@ static bool __core_patch_bracket(RCore *core, const char *str, ut64 *noff) {
 	return true;
 }
 
-R_API int r_core_patch(RCore *core, const char *patch) {
+R_API bool r_core_patch(RCore *core, const char *patch) {
 	char *p, *p0, *str;
 	ut64 noff = 0LL;
 
 	p = p0 = str = strdup (patch);
 	if (!p) {
-		return 0;
+		return false;
 	}
 	for (; *p; p++) {
 		/* read until newline */
@@ -143,5 +143,6 @@ R_API int r_core_patch(RCore *core, const char *patch) {
 		str = p;
 	}
 	free (p0);
-	return 0;
+	// TODO do some minimum error checking
+	return true;
 }

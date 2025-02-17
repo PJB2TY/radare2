@@ -1,4 +1,4 @@
-/* radare - LGPL3 - Copyright 2016-2024 - FXTi, pancake */
+/* radare - LGPL-3.0-only - Copyright 2016-2024 - FXTi, pancake */
 
 #include <r_arch.h>
 #include "pyc_dis.h"
@@ -198,8 +198,8 @@ const RArchPlugin r_arch_plugin_pyc = {
 	.meta = {
 		.name = "pyc",
 		.author = "fxti",
-		.desc = "Python bytecode analysis plugin",
-		.license = "LGPL3",
+		.desc = "Python bytecode (1.0 .. 3.9)",
+		.license = "LGPL-3.0-only",
 	},
 	.arch = "pyc",
 	.bits = R_SYS_BITS_PACK1 (32),

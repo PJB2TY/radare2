@@ -235,12 +235,12 @@ static RList* r_debug_evm_frames(RDebug *dbg, ut64 at) {
 RDebugPlugin r_debug_plugin_evm = {
 	.meta = {
 		.name = "evm",
-		.license = "LGPL3",
+		.license = "LGPL-3.0-only",
 		.author = "montekki",
 		.desc = "evm debugger backend",
 	},
 	.arch = "evm",
-	.bits = R_SYS_BITS_16 | R_SYS_BITS_8,
+	.bits = R_SYS_BITS_PACK2 (8, 16),
 	.step = r_debug_evm_step,
 	.cont = r_debug_evm_continue,
 	.attach = &r_debug_evm_attach,

@@ -65,10 +65,9 @@ R_API char *r_bin_filter_name(RBinFile *bf, HtSU *db, ut64 vaddr, const char *na
 	return resname;
 }
 
-R_API void r_bin_filter_sym(RBinFile *bf, HtPP *ht, ut64 vaddr, RBinSymbol *sym) {
-	R_RETURN_IF_FAIL (ht && sym && sym->name);
+R_IPI bool r_bin_filter_sym(RBinFile *bf, HtPP *ht, ut64 vaddr, RBinSymbol *sym) {
+	R_RETURN_VAL_IF_FAIL (ht && sym && sym->name, false);
 	const char *name = r_bin_name_tostring2 (sym->name, 'o');
-#if 1
 	if (bf && bf->bo && bf->bo->lang) {
 		const char *lang = r_bin_lang_tostring (bf->bo->lang);
 		char *dn = r_bin_demangle (bf, lang, name, sym->vaddr, false);
@@ -77,10 +76,10 @@ R_API void r_bin_filter_sym(RBinFile *bf, HtPP *ht, ut64 vaddr, RBinSymbol *sym)
 			// extract class information from demangled symbol name
 			char *p = strchr (dn, '.');
 			if (p) {
-				if (IS_UPPER (*dn)) {
+				if (isupper (*dn)) {
 					sym->classname = strdup (dn);
 					sym->classname[p - dn] = 0;
-				} else if (IS_UPPER (p[1])) {
+				} else if (isupper (p[1])) {
 					sym->classname = strdup (p + 1);
 					p = strchr (sym->classname, '.');
 					if (p) {
@@ -91,11 +90,10 @@ R_API void r_bin_filter_sym(RBinFile *bf, HtPP *ht, ut64 vaddr, RBinSymbol *sym)
 		}
 		free (dn);
 	}
-#endif
 	r_strf_var (uname, 256, "%" PFMT64x ".%c.%s", vaddr, sym->is_imported ? 'i' : 's', name);
 	bool res = ht_pp_insert (ht, uname, sym);
 	if (!res) {
-		return;
+		return false;
 	}
 	sym->dup_count = 0;
 
@@ -104,12 +102,13 @@ R_API void r_bin_filter_sym(RBinFile *bf, HtPP *ht, ut64 vaddr, RBinSymbol *sym)
 	if (!prev_sym) {
 		if (!ht_pp_insert (ht, oname, sym)) {
 			R_LOG_WARN ("Failed to insert dup_count in ht");
-			return;
+			return false;
 		}
 	} else {
 		sym->dup_count = prev_sym->dup_count + 1;
 		ht_pp_update (ht, oname, sym);
 	}
+	return true;
 }
 
 R_API void r_bin_filter_symbols(RBinFile *bf, RList *list) {
@@ -157,7 +156,7 @@ static bool false_positive(const char *str) {
 	}
 #endif
 	for (i = 0; str[i]; i++) {
-		if (IS_DIGIT (str[i])) {
+		if (isdigit (str[i])) {
 			nm++;
 		} else if (str[i]>='a' && str[i]<='z') {
 			lo++;
@@ -272,10 +271,10 @@ static bool bin_strfilter(RBin *bin, const char *str) {
 			    (in_esc_seq && (ch == 't' || ch == 'n' || ch == 'r'))) {
 				goto loop_end;
 			}
-			if (ch < 0 || !IS_PRINTABLE (ch) || IS_LOWER (ch)) {
+			if (ch < 0 || !IS_PRINTABLE (ch) || islower (ch)) {
 				return false;
 			}
-			if (IS_UPPER (ch)) {
+			if (isupper (ch)) {
 				got_uppercase = true;
 			}
 loop_end:
@@ -330,7 +329,7 @@ loop_end:
 			bool prevd = false;
 			for (i = 0; str[i]; i++) {
 				char ch = str[i];
-				if (IS_DIGIT (ch)) {
+				if (isdigit (ch)) {
 					segmentsum = segmentsum*10 + (ch - '0');
 					if (segment == 3) {
 						return true;

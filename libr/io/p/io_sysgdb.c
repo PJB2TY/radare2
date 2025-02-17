@@ -1,7 +1,6 @@
-/* radare - LGPL - Copyright 2023 - pancake */
+/* radare - LGPL - Copyright 2023-2024 - pancake */
 
 #include <r_io.h>
-#include <r_lib.h>
 
 #if 0
 on macOS:
@@ -457,7 +456,7 @@ static const char x86r_32[] = "\n"
 "drx	dr7	.32	28	0\n";
 
 static bool is_arch_arm(RIO *io) {
-	char *arch = io->coreb.cmdstrf (io->coreb.core, "-a");
+	char *arch = io->coreb.cmdStrF (io->coreb.core, "-a");
 	bool is_arm = !strcmp (arch, "arm");
 	free (arch);
 	return is_arm;
@@ -764,6 +763,7 @@ RIOPlugin r_io_plugin_sysgdb = {
 	.meta = {
 		.name = "sysgdb",
 		.desc = "spawn gdb/lldb and use the program instead of the protocol",
+		.author = "pancake",
 		.license = "MIT",
 	},
 	.uris = "sysgdb://",

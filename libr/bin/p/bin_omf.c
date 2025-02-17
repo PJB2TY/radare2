@@ -1,14 +1,13 @@
-/* radare - LGPL - Copyright 2015-2023 - ampotos, pancake */
+/* radare - LGPL - Copyright 2015-2024 - ampotos, pancake */
 
-#include <r_lib.h>
 #include <r_bin.h>
 #include "omf/omf.h"
 
 static bool load(RBinFile *bf, RBuffer *b, ut64 loadaddr) {
-	r_return_val_if_fail (bf && b, false);
+	R_RETURN_VAL_IF_FAIL (bf && b, false);
 	ut64 size;
 	const ut8 *buf = r_buf_data (b, &size);
-	r_return_val_if_fail (buf, false);
+	R_RETURN_VAL_IF_FAIL (buf, false);
 	bf->bo->bin_obj = r_bin_internal_omf_load (buf, size);
 	return bf->bo->bin_obj != NULL;
 }
@@ -49,7 +48,7 @@ static bool check(RBinFile *bf, RBuffer *b) {
 		r_buf_read_at (b, 0, buf, sizeof (buf));
 		return r_bin_checksum_omf_ok (buf, sizeof (buf));
 	}
-	r_return_val_if_fail (buf, false);
+	R_RETURN_VAL_IF_FAIL (buf, false);
 	return r_bin_checksum_omf_ok (buf, length);
 }
 
@@ -159,8 +158,10 @@ RBinPlugin r_bin_plugin_omf = {
 	.meta = {
 		.name = "omf",
 		.desc = "omf bin plugin",
-		.license = "LGPL3",
+		.author = "ampotos",
+		.license = "LGPL-3.0-only",
 	},
+	.weak_guess = true,
 	.load = &load,
 	.destroy = &destroy,
 	.check = &check,

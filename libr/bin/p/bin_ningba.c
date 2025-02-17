@@ -9,7 +9,7 @@
 
 static bool check(RBinFile *bf, RBuffer *b) {
 	ut8 lict[156];
-	r_return_val_if_fail (b, false);
+	R_RETURN_VAL_IF_FAIL (b, false);
 	r_buf_read_at (b, 4, (ut8*)lict, sizeof (lict));
 	return !memcmp (lict, lic_gba, 156);
 }
@@ -85,8 +85,9 @@ static RList *sections(RBinFile *bf) {
 RBinPlugin r_bin_plugin_ningba = {
 	.meta = {
 		.name = "ningba",
+		.author = "condret",
 		.desc = "Game Boy Advance format r_bin plugin",
-		.license = "LGPL3",
+		.license = "LGPL-3.0-only",
 	},
 	.load = &load,
 	.check = &check,

@@ -3,7 +3,7 @@
 #include <r_crypto.h>
 #include <r_hash.h>
 #include <config.h>
-#include "r_util/r_assert.h"
+#include <r_util/r_assert.h>
 
 R_LIB_VERSION (r_crypto);
 
@@ -42,7 +42,7 @@ R_API RCrypto *r_crypto_new(void) {
 	return cry;
 }
 
-R_API void r_crypto_job_free(RCryptoJob *cj) {
+R_API void r_crypto_job_free(R_NULLABLE RCryptoJob *cj) {
 	if (cj) {
 		if (cj->h->fini) {
 			cj->h->fini (cj);
@@ -72,7 +72,7 @@ R_API void r_crypto_free(RCrypto *cry) {
 }
 
 R_API RCryptoJob *r_crypto_use(RCrypto *cry, const char *algo) {
-	r_return_val_if_fail (cry && algo, false);
+	R_RETURN_VAL_IF_FAIL (cry && algo, false);
 	RListIter *iter, *iter2;
 	RCryptoPlugin *h;
 	r_list_foreach (cry->plugins, iter, h) {
@@ -100,7 +100,7 @@ R_API RCryptoJob *r_crypto_use(RCrypto *cry, const char *algo) {
 }
 
 R_API bool r_crypto_job_set_key(RCryptoJob *cj, const ut8* key, int keylen, int mode, int direction) {
-	r_return_val_if_fail (cj, false);
+	R_RETURN_VAL_IF_FAIL (cj, false);
 	if (keylen < 0) {
 		keylen = strlen ((const char *)key);
 	}
@@ -113,7 +113,7 @@ R_API bool r_crypto_job_set_key(RCryptoJob *cj, const ut8* key, int keylen, int 
 }
 
 R_API int r_crypto_job_get_key_size(RCryptoJob *cj) {
-	r_return_val_if_fail (cj, false);
+	R_RETURN_VAL_IF_FAIL (cj, false);
 	return (cj->h && cj->h->get_key_size)?
 		cj->h->get_key_size (cj): 0;
 }
@@ -134,10 +134,8 @@ R_API bool r_crypto_job_update(RCryptoJob *cj, const ut8 *buf, int len) {
 R_API RCryptoJob *r_crypto_job_new(RCrypto *cry, RCryptoPlugin *cp) {
 	R_RETURN_VAL_IF_FAIL (cry && cp, NULL);
 	RCryptoJob *cj = R_NEW0 (RCryptoJob);
-	if (R_UNLIKELY (cj)) {
-		cj->h = cp;
-		cj->c = cry;
-	}
+	cj->h = cp;
+	cj->c = cry;
 	return cj;
 }
 
@@ -188,28 +186,30 @@ R_API ut8 *r_crypto_job_get_output(RCryptoJob *cj, int *size) {
 
 static inline void print_plugin_verbose(RCryptoPlugin *cp, PrintfCallback cb_printf) {
 	const char type = cp->type? cp->type: 'c';
-	const char *license = cp->meta.license? cp->meta.license: "LGPL";
 	const char *desc = r_str_get (cp->meta.desc);
-	const char *author = r_str_get (cp->meta.author);
-	cb_printf ("%c %12s %5s %s %s\n", type, cp->meta.name, license, desc, author);
+	cb_printf ("%c %12s  %s\n", type, cp->meta.name, desc);
 }
 
-R_API void r_crypto_list(RCrypto *cry, PrintfCallback cb_printf, int mode) {
+R_API void r_crypto_list(RCrypto *cry, R_NULLABLE PrintfCallback cb_printf, int mode, RCryptoType type) {
+	R_RETURN_IF_FAIL (cry);
 	if (!cb_printf) {
 		cb_printf = (PrintfCallback)printf;
 	}
 	PJ *pj = NULL;
+
 	if (mode == 'J') {
 		pj = pj_new ();
 		pj_a (pj);
 	} else if (mode == 'j') {
 		pj = pj_new ();
-		pj_o (pj);
-		pj_ka (pj, "plugins");
+		pj_a (pj);
 	}
 	RListIter *iter;
 	RCryptoPlugin *cp;
 	r_list_foreach (cry->plugins, iter, cp) {
+		if (cp->type != type && type != R_CRYPTO_TYPE_ALL) {
+			continue;
+		}
 		switch (mode) {
 		case 'q':
 			cb_printf ("%s\n", cp->meta.name);
@@ -219,20 +219,26 @@ R_API void r_crypto_list(RCrypto *cry, PrintfCallback cb_printf, int mode) {
 			break;
 		case 'j':
 			pj_o (pj);
-			pj_ks (pj, "type", "hash");
 			pj_ks (pj, "name", cp->meta.name);
 			switch (cp->type) {
-			case R_CRYPTO_TYPE_HASHER:
+			case R_CRYPTO_TYPE_HASH:
 				pj_ks (pj, "type", "hash");
 				break;
 			case R_CRYPTO_TYPE_ENCRYPT:
-				pj_ks (pj, "type", "crypto");
+				pj_ks (pj, "type", "encryption");
 				break;
 			case R_CRYPTO_TYPE_ENCODER:
 				pj_ks (pj, "type", "encoder");
 				break;
+			case R_CRYPTO_TYPE_SIGNATURE:
+				pj_ks (pj, "type", "signature");
+				break;
+			default:
+				R_LOG_ERROR ("Unknown algorithm type for %s", cp->meta.name);
+				pj_free (pj);
+				return;
 			}
-			pj_ko (pj, "meta");
+			// pj_ko (pj, "meta");
 			if (cp->meta.author) {
 				pj_ks (pj, "author", cp->meta.author);
 			}
@@ -242,7 +248,7 @@ R_API void r_crypto_list(RCrypto *cry, PrintfCallback cb_printf, int mode) {
 			if (cp->meta.license) {
 				pj_ks (pj, "license", cp->meta.license);
 			}
-			pj_end (pj);
+			// pj_end (pj);
 			pj_end (pj);
 			break;
 		default:
@@ -251,29 +257,31 @@ R_API void r_crypto_list(RCrypto *cry, PrintfCallback cb_printf, int mode) {
 		}
 	}
 	// TODO: R2_592 move all those static hashes into crypto plugins and remove the code below
-	int i;
-	for (i = 0; i < 64; i++) {
-		ut64 bits = ((ut64)1) << i;
-		const char *name = r_hash_name (bits);
-		if R_STR_ISEMPTY (name) {
-			continue;
-		}
-		switch (mode) {
-		case 'J':
-			pj_s (pj, name);
-			break;
-		case 'j':
-			pj_o (pj);
-			pj_ks (pj, "type", "hash");
-			pj_ks (pj, "name", name);
-			pj_end (pj);
-			break;
-		case 'q':
-			cb_printf ("%s\n", name);
-			break;
-		default:
-			cb_printf ("h %12s\n", name);
-			break;
+	if (type == R_CRYPTO_TYPE_HASH || type == R_CRYPTO_TYPE_ALL) {
+		int i;
+		for (i = 0; i < 64; i++) {
+			ut64 bits = ((ut64)1) << i;
+			const char *name = r_hash_name (bits);
+			if R_STR_ISEMPTY (name) {
+				continue;
+			}
+			switch (mode) {
+			case 'J':
+				pj_s (pj, name);
+				break;
+			case 'j':
+				pj_o (pj);
+				pj_ks (pj, "type", "hash");
+				pj_ks (pj, "name", name);
+				pj_end (pj);
+				break;
+			case 'q':
+				cb_printf ("%s\n", name);
+				break;
+			default:
+				cb_printf ("h %12s\n", name);
+				break;
+			}
 		}
 	}
 	if (mode == 'J') {
@@ -283,7 +291,7 @@ R_API void r_crypto_list(RCrypto *cry, PrintfCallback cb_printf, int mode) {
 		free (s);
 	} else if (mode == 'j') {
 		pj_end (pj);
-		pj_end (pj);
+	//	pj_end (pj);
 		char *s = pj_drain (pj);
 		cb_printf ("%s\n", s);
 		free (s);

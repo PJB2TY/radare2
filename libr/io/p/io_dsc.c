@@ -1,4 +1,4 @@
-/* radare - LGPL - Copyright 2008-2024 - mrmacete, pancake */
+/* radare - LGPL - Copyright 2008-2025 - mrmacete, pancake */
 
 #include <r_io.h>
 #include <r_lib.h>
@@ -79,12 +79,13 @@ typedef struct {
 	ut32 entries_size;
 } RDyldRebaseInfo1;
 
-static void r_io_dsc_rebase_infos_free(RDyldRebaseInfosEntry * entry);
+static void dsc_rebase_infos_free(RDyldRebaseInfosEntry * entry);
 
-R_VEC_TYPE_WITH_FINI (RIODscRebaseInfos, RDyldRebaseInfosEntry, r_io_dsc_rebase_infos_free);
+R_VEC_TYPE_WITH_FINI (RIODscRebaseInfos, RDyldRebaseInfosEntry, dsc_rebase_infos_free);
 
 typedef struct {
 	int fd;
+	char * file_name;
 	ut64 start;
 	ut64 end;
 	RIODscRebaseInfos rebase_infos;
@@ -104,9 +105,9 @@ typedef struct {
 	ut64 buf_off;
 } RIODscTrimmedRebaseInfo;
 
-static void r_io_dsc_slice_free(RIODscSlice * slice);
+static void dsc_slice_free(RIODscSlice * slice);
 
-R_VEC_TYPE_WITH_FINI (RIODscSlices, RIODscSlice, r_io_dsc_slice_free);
+R_VEC_TYPE_WITH_FINI (RIODscSlices, RIODscSlice, dsc_slice_free);
 
 typedef struct {
 	char *filename;
@@ -116,6 +117,7 @@ typedef struct {
 	RIO *io_backref;
 	RIODscSlices slices;
 	ut64 total_size;
+	ut64 last_seek;
 } RIODscObject;
 
 typedef enum {
@@ -183,29 +185,29 @@ typedef struct {
 	} \
 }
 
-static RIODscObject *r_io_dsc_object_new(RIO  *io, const char *filename, int perm, int mode);
-static void r_io_dsc_object_free(RIODscObject *dsc);
-static RDSCHeader * r_io_dsc_read_header(int fd, ut64 offset);
+static RIODscObject *dsc_object_new(RIO  *io, const char *filename, int perm, int mode);
+static void dsc_object_free(RIODscObject *dsc);
+static RDSCHeader * dsc_read_header(int fd, ut64 offset);
 
 static int r_io_internal_read(RIODscObject * dsc, ut64 off,  ut8 *buf, int count);
-static int r_io_dsc_slice_read(RIODscSlice * slice, ut64 off_local, ut8 * buf, int size);
-static void r_io_dsc_slice_rebase_bytes(RIODscSlice * slice, ut64 off_local, ut8 * buf, int size);
-static RList * r_io_dsc_slice_get_rebase_infos_by_range(RIODscSlice * slice, ut64 off_local, int size);
+static int dsc_slice_read(RIODscSlice * slice, ut64 off_local, ut8 * buf, int size);
+static void dsc_slice_rebase_bytes(RIODscSlice * slice, ut64 off_local, ut8 * buf, int size);
+static RList * dsc_slice_get_rebase_infos_by_range(RIODscSlice * slice, ut64 off_local, int size);
 static void rebase_bytes_v1(RIODscSlice * slice, RDyldRebaseInfo1 *rebase_info, ut8 *buf, ut64 offset, int count, ut64 buf_off);
 static void rebase_bytes_v2(RIODscSlice * slice, RDyldRebaseInfo2 *rebase_info, ut8 *buf, ut64 offset, int count, ut64 buf_off);
 static void rebase_bytes_v3(RIODscSlice * slice, RDyldRebaseInfo3 *rebase_info, ut8 *buf, ut64 offset, int count, ut64 buf_off);
 static void rebase_bytes_v5(RIODscSlice * slice, RDyldRebaseInfo5 *rebase_info, ut8 *buf, ut64 offset, int count, ut64 buf_off);
 
 static int r_io_posix_open(const char *file, int perm, int mode, bool nocache);
-static int r_io_dsc_object_read(RIO *io, RIODesc *fd, ut8 *buf, int count);
-static ut64 r_io_dsc_object_seek(RIO *io, RIODscObject *dsc, ut64 offset, int whence);
+static int dsc_object_read(RIO *io, RIODesc *fd, ut8 *buf, int count);
+static ut64 dsc_object_seek(RIO *io, RIODscObject *dsc, ut64 offset, int whence);
 
-static bool r_io_dsc_object_dig_slices(RIODscObject * dsc);
-static bool r_io_dsc_detect_subcache_format(int fd, ut32 sc_offset, ut32 sc_count, ut64 size, ut64 * out_entry_size, RDscSubcacheFormat * out_format);
-static bool r_io_dsc_dig_subcache(RIODscObject * dsc, const char * filename, ut64 start, ut8 * check_uuid, ut64 * out_size);
-static bool r_io_dsc_object_dig_one_slice(RIODscObject * dsc, int fd, ut64 start, ut64 end, ut8 * check_uuid, RDSCHeader * header, bool walk_monocache);
-static RIODscSlice * r_io_dsc_object_get_slice(RIODscObject * dsc, ut64 off_global);
-static RList * r_io_dsc_object_get_slices_by_range(RIODscObject * dsc, ut64 off_global, int size);
+static bool dsc_dig_slices(RIODscObject * dsc);
+static bool dsc_detect_subcache_format(int fd, ut32 sc_offset, ut32 sc_count, ut32 array_end, ut64 size, ut64 * out_entry_size, RDscSubcacheFormat * out_format);
+static bool dsc_dig_subcache(RIODscObject * dsc, const char * filename, ut64 start, ut8 * check_uuid, ut64 * out_size);
+static bool dsc_dig_one_slice(RIODscObject * dsc, int fd, const char * file_name, ut64 start, ut64 end, ut8 * check_uuid, RDSCHeader * header, bool walk_monocache);
+static RIODscSlice * dsc_get_slice(RIODscObject * dsc, ut64 off_global);
+static RList * dsc_get_slices_by_range(RIODscObject * dsc, ut64 off_global, int size);
 
 static bool is_valid_magic(ut8 magic[16]);
 static bool is_null_uuid(ut8 uuid[16]);
@@ -221,7 +223,7 @@ static bool __check(RIO *io, const char *file, bool many) {
 
 static RIODesc *__open(RIO *io, const char *file, int perm, int mode) {
 	if (*file && __check (io, file, false)) {
-		RIODscObject *dsc = r_io_dsc_object_new (io, file, perm, mode);
+		RIODscObject *dsc = dsc_object_new (io, file, perm, mode);
 		if (!dsc) {
 			return NULL;
 		}
@@ -237,25 +239,318 @@ static RIODesc *__open(RIO *io, const char *file, int perm, int mode) {
 }
 
 static int __read(RIO *io, RIODesc *fd, ut8 *buf, int len) {
-	return r_io_dsc_object_read (io, fd, buf, len);
+	return dsc_object_read (io, fd, buf, len);
 }
 
 static bool __close(RIODesc *fd) {
-	r_return_val_if_fail (fd, false);
+	R_RETURN_VAL_IF_FAIL (fd, false);
 	if (fd->data) {
-		r_io_dsc_object_free ((RIODscObject *) fd->data);
+		dsc_object_free ((RIODscObject *) fd->data);
 		fd->data = NULL;
 	}
 	return true;
 }
 
 static ut64 __lseek_dsc(RIO *io, RIODesc *fd, ut64 offset, int whence) {
-	r_return_val_if_fail (fd && fd->data, UT64_MAX);
-	return r_io_dsc_object_seek (io, (RIODscObject *)fd->data, offset, whence);
+	R_RETURN_VAL_IF_FAIL (fd && fd->data, UT64_MAX);
+	return dsc_object_seek (io, (RIODscObject *)fd->data, offset, whence);
 }
 
-static RIODscObject *r_io_dsc_object_new(RIO  *io, const char *filename, int perm, int mode) {
-	r_return_val_if_fail (io && filename, NULL);
+static char *__infoPointer(RIODscObject * dsc, ut64 size, int mode) {
+	PJ *pj = NULL;
+	RStrBuf *sb = NULL;
+	if (mode == R_MODE_JSON) {
+		pj = pj_new ();
+		if (!pj) {
+			return NULL;
+		}
+	} else if (mode == R_MODE_PRINT) {
+		sb = r_strbuf_new ("");
+	} else {
+		return NULL;
+	}
+
+	ut64 paddr = dsc->last_seek;
+
+	RList *slices = dsc_get_slices_by_range (dsc, paddr, size);
+	if (!slices) {
+		pj_free (pj);
+		r_strbuf_free (sb);
+		return NULL;
+	}
+
+	RListIter * iter;
+	RIODscTrimmedSlice * trimmed;
+
+	if (pj) {
+		pj_a (pj);
+	}
+
+	r_list_foreach (slices, iter, trimmed) {
+		RList * infos = dsc_slice_get_rebase_infos_by_range (trimmed->slice, trimmed->seek, trimmed->count);
+		if (!infos) {
+			pj_free (pj);
+			r_list_free (slices);
+			r_strbuf_free (sb);
+			return NULL;
+		}
+
+		RListIter * iter;
+		RIODscTrimmedRebaseInfo * trimmed_info;
+
+		r_list_foreach (infos, iter, trimmed_info) {
+			ut64 remaining_size = trimmed_info->count;
+			ut64 cursor = 0;
+			while (remaining_size > 0) {
+				ut8 raw_value_buf[8];
+				bool got_raw_value;
+				ut64 off_local = trimmed_info->off_local + cursor;
+				RIO_FREAD_AT_INTO_DIRECT (trimmed->slice->fd, off_local, &raw_value_buf, 8, got_raw_value);
+				remaining_size -= 8;
+				cursor += 8;
+				if (!got_raw_value) {
+					R_LOG_ERROR ("reading raw pointer");
+					break;
+				}
+
+				ut64 raw_value = r_read_le64 (raw_value_buf);
+
+				if (pj) {
+					pj_o (pj);
+				}
+
+				char * tmp = r_str_newf ("0x%"PFMT64x, trimmed->slice->start + off_local);
+				if (pj) {
+					pj_ks (pj, "paddr", tmp);
+				} else if (sb) {
+					r_strbuf_appendf (sb, "paddr: %s\n", tmp);
+				}
+				free (tmp);
+
+				tmp = r_str_newf ("0x%"PFMT64x, raw_value);
+				if (pj) {
+					pj_ks (pj, "raw", tmp);
+				} else if (sb) {
+					r_strbuf_appendf (sb, "raw: %s\n", tmp);
+				}
+				free (tmp);
+
+				tmp = r_str_newf ("v%d", trimmed_info->info->info->version);
+				if (pj) {
+					pj_ks (pj, "format", tmp);
+				} else if (sb) {
+					r_strbuf_appendf (sb, "format: %s\n", tmp);
+				}
+				free (tmp);
+
+				switch (trimmed_info->info->info->version) {
+				case 1:
+				case 2:
+				case 4:
+					break;
+				case 3:
+					if (R_IS_PTR_AUTHENTICATED (raw_value)) {
+						bool has_diversity = (raw_value & (1ULL << 48)) != 0;
+						if (pj) {
+							pj_kb (pj, "has_diversity", has_diversity);
+						}
+						if (has_diversity) {
+							ut64 diversity = (raw_value >> 32) & 0xFFFF;
+							if (pj) {
+								pj_kn (pj, "diversity", diversity);
+							} else if (sb) {
+								r_strbuf_appendf (sb, "diversity: 0x%"PFMT64x"\n", diversity);
+							}
+						}
+						ut64 key = (raw_value >> 49) & 3;
+						const char * names[4] = { "ia", "ib", "da", "db" };
+						if (pj) {
+							pj_ks (pj, "key", names[key]);
+						} else if (sb) {
+							r_strbuf_appendf (sb, "key: %s\n", names[key]);
+						}
+					}
+					break;
+				case 5:
+					if (R_IS_PTR_AUTHENTICATED (raw_value)) {
+						bool has_diversity = (raw_value & (1ULL << 50)) != 0;
+						if (pj) {
+							pj_kb (pj, "has_diversity", has_diversity);
+						}
+						if (has_diversity) {
+							ut64 diversity = (raw_value >> 34) & 0xFFFF;
+							if (pj) {
+								pj_kn (pj, "diversity", diversity);
+							} else if (sb) {
+								r_strbuf_appendf (sb, "diversity: 0x%"PFMT64x"\n", diversity);
+							}
+						}
+						ut64 key = (raw_value >> 51) & 1;
+						const char * names[2] = { "ia", "da" };
+						if (pj) {
+							pj_ks (pj, "key", names[key]);
+						} else if (sb) {
+							r_strbuf_appendf (sb, "key: %s\n", names[key]);
+						}
+					}
+					break;
+				default:
+					R_LOG_ERROR ("Unsupported rebase info version %d", trimmed_info->info->info->version);
+				}
+				if (pj) {
+					pj_end (pj);
+				} else if (sb) {
+					r_strbuf_append (sb, "\n");
+				}
+			}
+		}
+		r_list_free (infos);
+	}
+
+	r_list_free (slices);
+
+	if (pj) {
+		pj_end (pj);
+		return pj_drain (pj);
+	}
+	if (sb) {
+		return r_strbuf_drain (sb);
+	}
+	return NULL;
+}
+
+static char *__infoSubCache(RIODscObject * dsc, ut64 size, int mode) {
+	PJ *pj = NULL;
+	RStrBuf *sb = NULL;
+	if (mode == R_MODE_JSON) {
+		pj = pj_new ();
+		if (!pj) {
+			return NULL;
+		}
+	} else if (mode == R_MODE_PRINT) {
+		sb = r_strbuf_new ("");
+	} else {
+		return NULL;
+	}
+
+	ut64 paddr = dsc->last_seek;
+
+	RList * slices = dsc_get_slices_by_range (dsc, paddr, size);
+	if (!slices) {
+		r_strbuf_free (sb);
+		pj_free (pj);
+		return NULL;
+	}
+
+	RListIter * iter;
+	RIODscTrimmedSlice * trimmed;
+
+	if (pj) {
+		pj_a (pj);
+	}
+
+	r_list_foreach (slices, iter, trimmed) {
+		if (pj) {
+			pj_o (pj);
+		}
+
+		if (pj) {
+			pj_ks (pj, "file", trimmed->slice->file_name);
+		} else {
+		    r_strbuf_appendf (sb, "file: %s\n", trimmed->slice->file_name);
+		}
+
+		char * tmp = r_str_newf ("0x%"PFMT64x, trimmed->slice->start);
+		if (pj) {
+			pj_ks (pj, "start", tmp);
+		} else if (sb) {
+			r_strbuf_appendf (sb, "start: %s\n", tmp);
+		}
+		free (tmp);
+
+		tmp = r_str_newf ("0x%"PFMT64x, trimmed->slice->end);
+		if (pj) {
+			pj_ks (pj, "end", tmp);
+		} else if (sb) {
+			r_strbuf_appendf (sb, "end: %s\n", tmp);
+		}
+		free (tmp);
+
+		if (pj) {
+			pj_end (pj);
+		} else if (sb) {
+			r_strbuf_append (sb, "\n");
+		}
+	}
+
+	r_list_free (slices);
+
+	if (pj) {
+		pj_end (pj);
+	}
+
+	if (pj) {
+		return pj_drain (pj);
+	}
+	if (sb) {
+		return r_strbuf_drain (sb);
+	}
+	return NULL;
+}
+
+static char *__system(RIO *io, RIODesc *fd, const char *command) {
+	R_RETURN_VAL_IF_FAIL (io && fd && fd->data && command, NULL);
+	RIODscObject *dsc = (RIODscObject*) fd->data;
+
+	if (r_str_startswith (command, "iP")) {
+		ut64 size = 8;
+		switch (command[2]) {
+		case '?':
+			io->cb_printf ("Usage: :iP[j?] [size]\n");
+			io->cb_printf (" :iP?   get this help message\n");
+			io->cb_printf (" :iP    show pointer metadata\n");
+			io->cb_printf (" :iPj   show pointer metadata in json\n\n");
+			return NULL;
+		case 'j':
+			if (command[3] == ' ') {
+				size = r_num_math (NULL, command + 4);
+			}
+			return __infoPointer (dsc, size, R_MODE_JSON);
+		case ' ':
+			size = r_num_math (NULL, command + 3);
+		case '\0':
+			return __infoPointer (dsc, size, R_MODE_PRINT);
+		}
+	} else if (r_str_startswith (command, "iF")) {
+		ut64 size = 8;
+		switch (command[2]) {
+		case '?':
+			io->cb_printf ("Usage: :iF[j?] [size]\n");
+			io->cb_printf (" :iF?   get this help message\n");
+			io->cb_printf (" :iF    show info about (sub)cache file\n");
+			io->cb_printf (" :iF    show info about (sub)cache file in JSON\n\n");
+			return NULL;
+		case 'j':
+			if (command[3] == ' ') {
+				size = r_num_math (NULL, command + 4);
+			}
+			return __infoSubCache (dsc, size, R_MODE_JSON);
+		case ' ':
+			size = r_num_math (NULL, command + 3);
+		case '\0':
+			return __infoSubCache (dsc, size, R_MODE_PRINT);
+		}
+	} else if (command && command[0] == '?') {
+		io->cb_printf ("DSC commands are prefixed with `:` (alias for `=!`).\n");
+		io->cb_printf (":iP[j?] [size]        show pointer metadata at current seek\n");
+		io->cb_printf (":iF[j?] [size]        show info about (sub)cache file at current seek\n\n");
+	}
+
+	return NULL;
+}
+
+static RIODscObject *dsc_object_new(RIO  *io, const char *filename, int perm, int mode) {
+	R_RETURN_VAL_IF_FAIL (io && filename, NULL);
 
 	RIODscObject *dsc = R_NEW0 (RIODscObject);
 	if (!dsc) {
@@ -272,15 +567,15 @@ static RIODscObject *r_io_dsc_object_new(RIO  *io, const char *filename, int per
 	dsc->nocache = false;
 	dsc->io_backref = io;
 
-	if (!r_io_dsc_object_dig_slices (dsc)) {
-		r_io_dsc_object_free (dsc);
+	if (!dsc_dig_slices (dsc)) {
+		dsc_object_free (dsc);
 		return NULL;
 	}
 
 	return dsc;
 }
 
-static void r_io_dsc_object_free(RIODscObject *dsc) {
+static void dsc_object_free(RIODscObject *dsc) {
 	if (dsc) {
 		free (dsc->filename);
 		RIODscSlices_fini (&dsc->slices);
@@ -288,13 +583,13 @@ static void r_io_dsc_object_free(RIODscObject *dsc) {
 	}
 }
 
-static bool r_io_dsc_object_dig_slices(RIODscObject * dsc) {
+static bool dsc_dig_slices(RIODscObject * dsc) {
 	int fd = r_io_posix_open (dsc->filename, O_RDONLY, dsc->mode, dsc->nocache);
 	if (fd == -1) {
 		return false;
 	}
 
-	RDSCHeader * header = r_io_dsc_read_header (fd, 0);
+	RDSCHeader * header = dsc_read_header (fd, 0);
 	if (!header) {
 		R_LOG_ERROR ("Could not parse header");
 		goto error;
@@ -311,7 +606,7 @@ static bool r_io_dsc_object_dig_slices(RIODscObject * dsc) {
 	if (!dsc_header_get_u32 (header, "subCacheArrayOffset", &subCacheArrayOffset)) {
 		// not a multi-file cache
 		dsc->total_size = next_or_end;
-		return r_io_dsc_object_dig_one_slice (dsc, fd, 0, next_or_end, NULL, header, false);
+		return dsc_dig_one_slice (dsc, fd, dsc->filename, 0, next_or_end, NULL, header, false);
 	} else {
 		if (!dsc_header_get_u32 (header, "subCacheArrayCount", &subCacheArrayCount)) {
 			R_LOG_ERROR ("Malformed multi file cache");
@@ -334,7 +629,7 @@ static bool r_io_dsc_object_dig_slices(RIODscObject * dsc) {
 				if (is_valid_magic (tmp)) {
 					// cache files are cat together ("monocache")
 					dsc->total_size = next_or_end;
-					return r_io_dsc_object_dig_one_slice (dsc, fd, 0, next_or_end, NULL, header, true);
+					return dsc_dig_one_slice (dsc, fd, dsc->filename, 0, next_or_end, NULL, header, true);
 				}
 			}
 		}
@@ -343,7 +638,11 @@ static bool r_io_dsc_object_dig_slices(RIODscObject * dsc) {
 		RDscSubcacheFormat sc_format = SUBCACHE_FORMAT_UNDEFINED;
 
 		if (subCacheArrayCount) {
-			if (!r_io_dsc_detect_subcache_format(fd, subCacheArrayOffset, subCacheArrayCount, next_or_end, &sc_entry_size, &sc_format)) {
+			ut32 array_end = 0;
+
+			dsc_header_get_u32 (header, "maybePointsToLinkeditMapAtTheEndOfSubCachesArray", &array_end);
+
+			if (!dsc_detect_subcache_format(fd, subCacheArrayOffset, subCacheArrayCount, array_end, next_or_end, &sc_entry_size, &sc_format)) {
 				R_LOG_ERROR ("Could not detect subcache entry format");
 				goto error;
 			}
@@ -358,7 +657,7 @@ static bool r_io_dsc_object_dig_slices(RIODscObject * dsc) {
 		ut64 cursor = 0;
 		int i;
 
-		r_io_dsc_object_dig_one_slice (dsc, fd, 0, next_or_end, NULL, header, false);
+		dsc_dig_one_slice (dsc, fd, dsc->filename, 0, next_or_end, NULL, header, false);
 		cursor = next_or_end;
 
 		ut64 sc_entry_cursor = subCacheArrayOffset;
@@ -394,9 +693,12 @@ static bool r_io_dsc_object_dig_slices(RIODscObject * dsc) {
 				memcpy (check_uuid, entry.uuid, 16);
 				break;
 			}
+#if 1
+			// its unreachable by coverity but reachable by gcc, so it cant be commented :D
 			case SUBCACHE_FORMAT_UNDEFINED:
 				suffix = NULL;
 				break;
+#endif
 			}
 
 			char * subcache_filename = r_str_newf ("%s%s", dsc->filename, suffix);
@@ -405,7 +707,7 @@ static bool r_io_dsc_object_dig_slices(RIODscObject * dsc) {
 				goto error;
 			}
 			ut64 size;
-			bool success = r_io_dsc_dig_subcache (dsc, subcache_filename, cursor, check_uuid, &size);
+			bool success = dsc_dig_subcache (dsc, subcache_filename, cursor, check_uuid, &size);
 			free (subcache_filename);
 			if (!success) {
 				goto error;
@@ -420,7 +722,7 @@ static bool r_io_dsc_object_dig_slices(RIODscObject * dsc) {
 			if (!subcache_filename) {
 				goto error;
 			}
-			bool success = r_io_dsc_dig_subcache (dsc, subcache_filename, cursor, sym_uuid, &size);
+			bool success = dsc_dig_subcache (dsc, subcache_filename, cursor, sym_uuid, &size);
 			free (subcache_filename);
 			if (!success) {
 				goto error;
@@ -440,12 +742,21 @@ error:
 	return false;
 }
 
-static bool r_io_dsc_detect_subcache_format(int fd, ut32 sc_offset, ut32 sc_count, ut64 size, ut64 * out_entry_size, RDscSubcacheFormat * out_format) {
+static bool dsc_detect_subcache_format(int fd, ut32 sc_offset, ut32 sc_count, ut32 array_end, ut64 size, ut64 * out_entry_size, RDscSubcacheFormat * out_format) {
 	RDscSubcacheFormat sc_format = SUBCACHE_FORMAT_UNDEFINED;
 	ut64 sc_entry_size = 0;
+	ut64 array_size_v2 = sizeof (RDscSubcacheEntryV2) * sc_count;
+
+	if (array_end) {
+		if (array_end == sc_offset + array_size_v2) {
+			sc_format = SUBCACHE_FORMAT_V2;
+			sc_entry_size = sizeof (RDscSubcacheEntryV2);
+			goto beach;
+		}
+	}
+
 	if (sc_count != 0) {
 		ut64 array_size_v1 = sizeof (RDscSubcacheEntryV1) * sc_count;
-		ut64 array_size_v2 = sizeof (RDscSubcacheEntryV2) * sc_count;
 		char test_v1, test_v2;
 
 		if (array_size_v1 + 1 >= size || array_size_v2 + 1 >= size) {
@@ -473,21 +784,21 @@ static bool r_io_dsc_detect_subcache_format(int fd, ut32 sc_offset, ut32 sc_coun
 			sc_entry_size = sizeof (RDscSubcacheEntryV2);
 		}
 	}
-
+beach:
 	*out_entry_size = sc_entry_size;
 	*out_format = sc_format;
 
 	return true;
 }
 
-static bool r_io_dsc_dig_subcache(RIODscObject * dsc, const char * filename, ut64 start, ut8 * check_uuid, ut64 * out_size) {
+static bool dsc_dig_subcache(RIODscObject * dsc, const char * filename, ut64 start, ut8 * check_uuid, ut64 * out_size) {
 	int sc_fd = r_io_posix_open (filename, O_RDONLY, dsc->mode, dsc->nocache);
 	if (sc_fd == -1) {
 		R_LOG_ERROR ("Could not open subcache %s", filename);
 		return false;
 	}
 
-	RDSCHeader * sc_header = r_io_dsc_read_header (sc_fd, 0);
+	RDSCHeader * sc_header = dsc_read_header (sc_fd, 0);
 	if (!sc_header) {
 		close (sc_fd);
 		R_LOG_ERROR ("Could not parse header");
@@ -501,7 +812,7 @@ static bool r_io_dsc_dig_subcache(RIODscObject * dsc, const char * filename, ut6
 
 	*out_size = size;
 
-	if (!r_io_dsc_object_dig_one_slice (dsc, sc_fd, start, start + size, check_uuid, sc_header, false)) {
+	if (!dsc_dig_one_slice (dsc, sc_fd, filename, start, start + size, check_uuid, sc_header, false)) {
 		close (sc_fd);
 		dsc_header_free (sc_header);
 		return false;
@@ -511,7 +822,7 @@ static bool r_io_dsc_dig_subcache(RIODscObject * dsc, const char * filename, ut6
 	return true;
 }
 
-static bool r_io_dsc_object_dig_one_slice(RIODscObject * dsc, int fd, ut64 start, ut64 end, ut8 * check_uuid, RDSCHeader * header, bool walk_monocache) {
+static bool dsc_dig_one_slice(RIODscObject * dsc, int fd, const char * file_name, ut64 start, ut64 end, ut8 * check_uuid, RDSCHeader * header, bool walk_monocache) {
 	if (check_uuid) {
 		ut8 uuid[16];
 
@@ -533,12 +844,15 @@ static bool r_io_dsc_object_dig_one_slice(RIODscObject * dsc, int fd, ut64 start
 
 	slice->fd = fd;
 	slice->start = start;
+	if (file_name) {
+		slice->file_name = strdup (file_name);
+	}
 
 	if (walk_monocache) {
 		ut64 cursor = start;
 
 		while (true) {
-			RDSCHeader * sc_header = r_io_dsc_read_header (fd, cursor);
+			RDSCHeader * sc_header = dsc_read_header (fd, cursor);
 			if (!sc_header) {
 				break;
 			}
@@ -570,15 +884,16 @@ static bool r_io_dsc_object_dig_one_slice(RIODscObject * dsc, int fd, ut64 start
 	return true;
 }
 
-static void r_io_dsc_slice_free(RIODscSlice * slice) {
+static void dsc_slice_free(RIODscSlice * slice) {
 	if (!slice) {
 		return;
 	}
+	R_FREE (slice->file_name);
 	close (slice->fd);
 	RIODscRebaseInfos_fini (&slice->rebase_infos);
 }
 
-static void r_io_dsc_rebase_infos_free(RDyldRebaseInfosEntry * entry) {
+static void dsc_rebase_infos_free(RDyldRebaseInfosEntry * entry) {
 	if (!entry) {
 		return;
 	}
@@ -604,8 +919,8 @@ static int r_io_posix_open(const char *file, int perm, int mode, bool nocache) {
 	return fd;
 }
 
-static int r_io_dsc_object_read(RIO *io, RIODesc *fd, ut8 *buf, int count) {
-	r_return_val_if_fail (fd && fd->data && buf, -1);
+static int dsc_object_read(RIO *io, RIODesc *fd, ut8 *buf, int count) {
+	R_RETURN_VAL_IF_FAIL (fd && fd->data && buf, -1);
 	if (io->off == UT64_MAX) {
 		memset (buf, 0xff, count);
 		return count;
@@ -622,7 +937,7 @@ static int r_io_dsc_object_read(RIO *io, RIODesc *fd, ut8 *buf, int count) {
 }
 
 static int r_io_internal_read(RIODscObject * dsc, ut64 off_global, ut8 *buf, int count) {
-	RList * slices = r_io_dsc_object_get_slices_by_range (dsc, off_global, count);
+	RList * slices = dsc_get_slices_by_range (dsc, off_global, count);
 	if (!slices) {
 		return -1;
 	}
@@ -635,7 +950,7 @@ static int r_io_internal_read(RIODscObject * dsc, ut64 off_global, ut8 *buf, int
 	int n_slices = r_list_length (slices);
 
 	r_list_foreach (slices, iter, trimmed) {
-		int one_result = r_io_dsc_slice_read (trimmed->slice, trimmed->seek, buf + trimmed->buf_off, trimmed->count);
+		int one_result = dsc_slice_read (trimmed->slice, trimmed->seek, buf + trimmed->buf_off, trimmed->count);
 		if (one_result == -1) {
 			failures++;
 			if (index < n_slices - 1) {
@@ -656,28 +971,27 @@ static int r_io_internal_read(RIODscObject * dsc, ut64 off_global, ut8 *buf, int
 	return total;
 }
 
-static ut64 r_io_dsc_object_seek(RIO *io, RIODscObject *dsc, ut64 offset, int whence) {
+static ut64 dsc_object_seek(RIO *io, RIODscObject *dsc, ut64 offset, int whence) {
 	if (!dsc || offset == UT64_MAX) {
 		return UT64_MAX;
 	}
 
 	ut64 off_global;
-
 	switch (whence) {
-		case SEEK_SET:
-			off_global = offset;
-			break;
-		case SEEK_CUR:
-			off_global = io->off + offset;
-			break;
-		case SEEK_END:
-			off_global = dsc->total_size + offset;
-			break;
-		default:
-			return UT64_MAX;
+	case R_IO_SEEK_SET:
+		off_global = offset; // XXX
+		break;
+	case R_IO_SEEK_CUR:
+		off_global = io->off + offset; // XXX
+		break;
+	case R_IO_SEEK_END:
+		off_global = dsc->total_size + offset; // XXX
+		break;
+	default:
+		return UT64_MAX;
 	}
 
-	RIODscSlice * slice = r_io_dsc_object_get_slice(dsc, off_global);
+	RIODscSlice * slice = dsc_get_slice (dsc, off_global);
 	if (!slice) {
 		if (whence == SEEK_END && off_global >= dsc->total_size) {
 			io->off = dsc->total_size;
@@ -694,10 +1008,12 @@ static ut64 r_io_dsc_object_seek(RIO *io, RIODscObject *dsc, ut64 offset, int wh
 
 	io->off = off_local + slice->start;
 
+	dsc->last_seek = io->off;
+
 	return io->off;
 }
 
-static RIODscSlice * r_io_dsc_object_get_slice(RIODscObject * dsc, ut64 off_global) {
+static RIODscSlice *dsc_get_slice(RIODscObject * dsc, ut64 off_global) {
 	RIODscSlice * slice;
 
 	R_VEC_FOREACH (&dsc->slices, slice) {
@@ -709,7 +1025,7 @@ static RIODscSlice * r_io_dsc_object_get_slice(RIODscObject * dsc, ut64 off_glob
 	return NULL;
 }
 
-static RList * r_io_dsc_object_get_slices_by_range(RIODscObject * dsc, ut64 off_global, int size) {
+static RList *dsc_get_slices_by_range(RIODscObject * dsc, ut64 off_global, int size) {
 	if (off_global == UT64_MAX || size == UT64_MAX || size == 0) {
 		return NULL;
 	}
@@ -748,17 +1064,17 @@ static RList * r_io_dsc_object_get_slices_by_range(RIODscObject * dsc, ut64 off_
 	return result;
 }
 
-static int r_io_dsc_slice_read(RIODscSlice * slice, ut64 off_local, ut8 * buf, int size) {
+static int dsc_slice_read(RIODscSlice * slice, ut64 off_local, ut8 * buf, int size) {
 	if (lseek (slice->fd, off_local, SEEK_SET) < 0) {
 		return -1;
 	}
 	int count = read (slice->fd, buf, size);
-	r_io_dsc_slice_rebase_bytes (slice, off_local, buf, count);
+	dsc_slice_rebase_bytes (slice, off_local, buf, count);
 	return count;
 }
 
-static void r_io_dsc_slice_rebase_bytes(RIODscSlice * slice, ut64 off_local, ut8 * buf, int size) {
-	RList * infos = r_io_dsc_slice_get_rebase_infos_by_range (slice, off_local, size);
+static void dsc_slice_rebase_bytes(RIODscSlice * slice, ut64 off_local, ut8 * buf, int size) {
+	RList * infos = dsc_slice_get_rebase_infos_by_range (slice, off_local, size);
 	if (!infos) {
 		return;
 	}
@@ -793,7 +1109,7 @@ static void r_io_dsc_slice_rebase_bytes(RIODscSlice * slice, ut64 off_local, ut8
 	r_list_free (infos);
 }
 
-static RList * r_io_dsc_slice_get_rebase_infos_by_range(RIODscSlice * slice, ut64 off_local, int size) {
+static RList * dsc_slice_get_rebase_infos_by_range(RIODscSlice * slice, ut64 off_local, int size) {
 	ut64 slice_size = slice->end - slice->start;
 	if (off_local + size > slice_size  || size == 0) {
 		return NULL;
@@ -1103,7 +1419,7 @@ static bool __is_blockdevice(RIODesc *desc) {
 }
 #endif
 
-static RDSCHeader * r_io_dsc_read_header(int fd, ut64 offset) {
+static RDSCHeader * dsc_read_header(int fd, ut64 offset) {
 	ut8 tmp[16];
 
 	if (lseek (fd, offset, SEEK_SET) < 0) {
@@ -1214,6 +1530,7 @@ static bool get_rebase_infos(RIODscSlice * slice, int fd, ut64 start, RDSCHeader
 				info->info = get_rebase_info (fd, slideInfoOffset, slideInfoSize, info->start, 0);
 				if (!info->info) {
 					R_LOG_ERROR ("Failed to get rebase info");
+					return false;
 				}
 			}
 		}
@@ -1242,6 +1559,7 @@ static bool get_rebase_infos(RIODscSlice * slice, int fd, ut64 start, RDSCHeader
 			info->info = get_rebase_info (fd, slideInfoOffset, slideInfoSize, info->start, 0);
 			if (!info->info) {
 				R_LOG_ERROR ("Failed to get rebase info");
+				return false;
 			}
 		}
 	}
@@ -1588,7 +1906,8 @@ RIOPlugin r_io_plugin_dsc = {
 	.meta = {
 		.name = "dsc",
 		.desc = "Open dyld shared library caches",
-		.license = "LGPL3",
+		.author = "mrmacete",
+		.license = "LGPL-3.0-only",
 	},
 	.uris = URL_SCHEME,
 	.open = __open,
@@ -1596,6 +1915,7 @@ RIOPlugin r_io_plugin_dsc = {
 	.read = __read,
 	.check = __check,
 	.seek = __lseek_dsc,
+	.system = __system,
 #if R2__UNIX__
 	.is_blockdevice = __is_blockdevice,
 #endif
