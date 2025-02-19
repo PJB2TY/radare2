@@ -77,7 +77,7 @@ R_API bool r_core_dump(RCore *core, const char *file, ut64 addr, ut64 size, int 
 		fd = r_sandbox_fopen (file, "wb");
 	}
 	if (!fd) {
-		R_LOG_ERROR ("Cannot open '%s' for writing", file);
+		R_LOG_ERROR ("Cannot open coredump '%s' for writing", file);
 		return false;
 	}
 	/* some io backends seems to be buggy in those cases */
@@ -347,25 +347,25 @@ R_API int r_core_write_op(RCore *core, const char *arg, char op) {
 	return ret;
 }
 
-// Get address-specific bits and arch at a certain address.
-// If there are no specific infos (i.e. asm.bits and asm.arch should apply), the bits and arch will be 0 or NULL respectively!
 R_API void r_core_arch_bits_at(RCore *core, ut64 addr, R_OUT R_NULLABLE int *bits, R_OUT R_BORROW R_NULLABLE const char **arch) {
 	int bitsval = 0;
 	const char *archval = NULL;
 	RBinObject *o = r_bin_cur_object (core->bin);
-	RBinSection *s = o ? r_bin_get_section_at (o, addr, core->io->va) : NULL;
-	if (s) {
-		if (!core->fixedarch) {
-			archval = s->arch;
-		}
-		if (!core->fixedbits && s->bits) {
-			// only enforce if there's one bits set
-			switch (s->bits) {
-			case R_SYS_BITS_16:
-			case R_SYS_BITS_32:
-			case R_SYS_BITS_64:
-				bitsval = s->bits * 8;
-				break;
+	if (!core->fixedarch || !core->fixedbits) {
+		RBinSection *s = o ? r_bin_get_section_at (o, addr, core->io->va) : NULL;
+		if (s) {
+			if (!core->fixedarch) {
+				archval = s->arch;
+			}
+			if (!core->fixedbits && s->bits) {
+				// only enforce if there's one bits set
+				if (R_SYS_BITS_CHECK (s->bits, 16)) {
+					bitsval = 16;
+				} else if (R_SYS_BITS_CHECK (s->bits, 32)) {
+					bitsval = 32;
+				} else if (R_SYS_BITS_CHECK (s->bits, 64)) {
+					bitsval = 64;
+				}
 			}
 		}
 	}
@@ -441,35 +441,42 @@ R_API int r_core_seek_delta(RCore *core, st64 addr) {
 
 // TODO: R2_600 deprecate this wrapper
 R_API bool r_core_write_at(RCore *core, ut64 addr, const ut8 *buf, int size) {
-	r_return_val_if_fail (core && buf && addr != UT64_MAX, false);
+	R_RETURN_VAL_IF_FAIL (core && buf, false);
 	if (size < 1) {
 		return false;
 	}
-#if 1
-	int ret = r_io_write_at (core->io, addr, buf, size);
-	if (ret > 0) {
-		// ensure a little because we can't use bank_write_to_submap_at
-		ut8 word[4];
-		r_io_read_at (core->io, addr, word, sizeof (word));
-		ret = !memcmp (word, buf, R_MIN (size, sizeof (word)));
-	}
-#else
-	int ret = r_io_bank_write_to_submap_at (core->io, core->io->bank, addr, buf, size);
-	if (r_config_get_b (core->config, "io.cache")) {
-		ret = r_io_write_at (core->io, addr, buf, size);
+	bool ret = false;
+	if (core->io->va && !r_config_get_b (core->config, "io.voidwrites")) {
+		ut64 vaddr = addr;
+		if ((UT64_MAX - (size - 1)) < addr) {
+			int len = UT64_MAX - addr + 1;
+			if (!r_io_map_locate (core->io, &vaddr, len, 1) || vaddr != addr) {
+				ret = r_io_write_at (core->io, addr, buf, size);
+				goto beach;
+			}
+			vaddr = 0;
+			if (!r_io_map_locate (core->io, &vaddr, size - len, 1) || vaddr != 0ULL) {
+				ret = r_io_write_at (core->io, addr, buf, size);
+			} else {
+				return false;
+			}
+		} else if (!r_io_map_locate (core->io, &vaddr, size, 1) || vaddr != addr) {
+			ret = r_io_write_at (core->io, addr, buf, size);
+		} else {
+			return false;
+		}
 	} else {
-		ret = r_io_bank_write_to_submap_at (core->io, core->io->bank, addr, buf, size) > 0;
+		ret = r_io_write_at (core->io, addr, buf, size);
 	}
-	// bool ret = r_io_write_at (core->io, addr, buf, size);
-#endif
+beach:
 	if (addr >= core->offset && addr <= core->offset + core->blocksize - 1) {
 		r_core_block_read (core);
 	}
-	return ret > 0;
+	return ret;
 }
 
 R_API bool r_core_extend_at(RCore *core, ut64 addr, int size) {
-	r_return_val_if_fail (core && core->io, false);
+	R_RETURN_VAL_IF_FAIL (core && core->io, false);
 	if (!core->io->desc || size < 1 || addr == UT64_MAX) {
 		return false;
 	}

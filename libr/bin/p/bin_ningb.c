@@ -24,7 +24,7 @@ static ut64 baddr(RBinFile *bf) {
 }
 
 static RBinAddr* binsym(RBinFile *bf, int type) {
-	r_return_val_if_fail (bf && bf->buf, NULL);
+	R_RETURN_VAL_IF_FAIL (bf && bf->buf, NULL);
 	if (type == R_BIN_SYM_MAIN) {
 		ut8 init_jmp[4];
 		RBinAddr *ret = R_NEW0 (RBinAddr);
@@ -41,7 +41,7 @@ static RBinAddr* binsym(RBinFile *bf, int type) {
 }
 
 static RList* entries(RBinFile *bf) {
-	r_return_val_if_fail (bf && bf->buf, NULL);
+	R_RETURN_VAL_IF_FAIL (bf && bf->buf, NULL);
 	RList *ret = r_list_newf (free);
 	if (!ret) {
 		return NULL;
@@ -282,8 +282,9 @@ RList *mem (RBinFile *bf) {
 RBinPlugin r_bin_plugin_ningb = {
 	.meta = {
 		.name = "ningb",
+		.author = "condret",
 		.desc = "Gameboy format r_bin plugin",
-		.license = "LGPL3",
+		.license = "LGPL-3.0-only",
 	},
 	.load = &load,
 	.check = &check,

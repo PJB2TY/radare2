@@ -1,4 +1,4 @@
-/* radare - LGPL - Copyright 2009-2023 - pancake */
+/* radare - LGPL - Copyright 2009-2024 - pancake */
 
 #include <r_userconf.h>
 #include <r_drx.h>
@@ -311,16 +311,16 @@ static RDebugReasonType r_debug_native_wait(RDebug *dbg, int pid) {
 
 			/* Check if autoload PDB is set, and load PDB information if yes */
 			RCore *core = dbg->coreb.core;
-			bool autoload_pdb = dbg->coreb.cfggeti (core, "pdb.autoload");
+			bool autoload_pdb = dbg->coreb.cfgGetI (core, "pdb.autoload");
 			if (autoload_pdb) {
 				PLIB_ITEM lib = r->lib;
 #if 0
 				dbg->coreb.cmdf (core, "\"o \\\"%s\\\" 0x%p\"", lib->Path, lib->BaseOfDll);
-				char *o_res = dbg->coreb.cmdstrf (core, "o~+%s", lib->Name);
+				char *o_res = dbg->coreb.cmdStrF (core, "o~+%s", lib->Name);
 				int fd = atoi (o_res);
 				free (o_res);
 				if (fd) {
-					char *pdb_file = dbg->coreb.cmdstr (core, "i~dbg_file");
+					char *pdb_file = dbg->coreb.cmdStr (core, "i~dbg_file");
 					if (pdb_file && (r_str_trim (pdb_file), *pdb_file)) {
 						if (!r_file_exists (pdb_file + 9)) {
 #else
@@ -534,7 +534,7 @@ static RDebugReasonType r_debug_native_wait(RDebug *dbg, int pid) {
 			 *
 			 * this might modify dbg->reason.signum
 			 */
-#if __OpenBSD__ || __NetBSD__
+#if R2__BSD__
 			reason = R_DEBUG_REASON_BREAKPOINT;
 #else
 			if (r_debug_handle_signals (dbg) != 0) {
@@ -662,10 +662,20 @@ static int bsd_reg_read(RDebug *dbg, int type, ut8* buf, int size) {
 		break;
 	case R_REG_TYPE_FPU:
 	case R_REG_TYPE_VEC64: // MMX
+	   ret = ptrace (PT_GETFPREGS, pid, (caddr_t)buf, sizeof (struct fpreg));
+	   break;
 	case R_REG_TYPE_VEC128: // XMM
 	case R_REG_TYPE_VEC256: // YMM
 	case R_REG_TYPE_VEC512: // ZMM
-		// not implemented
+#if __i386__ || __x86_64__
+#if __KFBSD__
+		struct ptrace_xstate_info info;
+		ret = ptrace (PT_GETXSTATE_INFO, pid, (caddr_t)&info, sizeof (info));
+		if (info.xsave_len != 0) {
+		ret = ptrace (PT_GETXSTATE, pid, (caddr_t)buf, info.xsave_len);
+		}
+#endif
+#endif
 		break;
 	case R_REG_TYPE_SEG:
 	case R_REG_TYPE_FLG:
@@ -1003,12 +1013,11 @@ static int r_debug_native_map_dealloc(RDebug *dbg, ut64 addr, int size) {
 
 #if !R2__WINDOWS__ && !__APPLE__
 static void _map_free(RDebugMap *map) {
-	if (!map) {
-		return;
+	if (map) {
+		free (map->name);
+		free (map->file);
+		free (map);
 	}
-	free (map->name);
-	free (map->file);
-	free (map);
 }
 #endif
 
@@ -1178,7 +1187,6 @@ static RList *r_debug_native_map_get(RDebug *dbg) {
 }
 
 static RList *r_debug_native_modules_get(RDebug *dbg) {
-R_LOG_INFO ("modules.get");
 	char *lastname = NULL;
 	RDebugMap *map;
 	RListIter *iter, *iter2;
@@ -1647,19 +1655,27 @@ RDebugPlugin r_debug_plugin_native = {
 	.meta = {
 		.name = "native",
 		.author = "pancake",
-		.license = "LGPL3",
+		.license = "LGPL-3.0-only",
 		.desc = "native debug plugin",
 	},
 #if __i386__
-	.bits = R_SYS_BITS_32,
+	.bits = R_SYS_BITS_PACK (32),
 	.arch = "x86",
 	.canstep = true,
+#elif __s390x__ || __s390__
+	.bits = R_SYS_BITS_PACK (64),
+	.arch = "s390",
+	.canstep = true,
+#elif __riscv || __riscv__ || __riscv64__
+	.bits = R_SYS_BITS_PACK (64),
+	.arch = "riscv",
+	.canstep = false,
 #elif __x86_64__
-	.bits = R_SYS_BITS_32 | R_SYS_BITS_64,
+	.bits = R_SYS_BITS_PACK2 (32, 64),
 	.arch = "x86",
 	.canstep = true, // XXX it's 1 on some platforms...
 #elif __aarch64__ || __arm64__ || __arm64e__
-	.bits = R_SYS_BITS_32 | R_SYS_BITS_64,
+	.bits = R_SYS_BITS_PACK2 (32, 64),
 	.arch = "arm",
 #if __APPLE__
 	.canstep = true,
@@ -1667,22 +1683,22 @@ RDebugPlugin r_debug_plugin_native = {
 	.canstep = false,
 #endif
 #elif __arm__
-	.bits = R_SYS_BITS_16 | R_SYS_BITS_32 | R_SYS_BITS_64,
+	.bits = R_SYS_BITS_PACK3 (16, 32, 64),
 	.arch = "arm",
 	.canstep = false,
 #elif __mips__
-	.bits = R_SYS_BITS_32 | R_SYS_BITS_64,
+	.bits = R_SYS_BITS_PACK2 (32, 64),
 	.arch = "mips",
 	.canstep = false,
 #elif __loongarch
-	.bits = R_SYS_BITS_32 | R_SYS_BITS_64,
+	.bits = R_SYS_BITS_PACK2 (32, 64),
 	.arch = "loongarch",
 	.canstep = false,
 #elif __powerpc__
 # if __powerpc64__
-	.bits = R_SYS_BITS_32 | R_SYS_BITS_64,
+	.bits = R_SYS_BITS_PACK2 (32, 64),
 # else
-	.bits = R_SYS_BITS_32,
+	.bits = R_SYS_BITS_PACK (32),
 #endif
 	.arch = "ppc",
 	.canstep = true,

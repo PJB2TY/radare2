@@ -1,4 +1,4 @@
-/* radare2 - LGPL - Copyright 2022-2023 - terorie */
+/* radare2 - LGPL - Copyright 2022-2024 - terorie */
 
 #include <r_anal.h>
 #include <r_esil.h>
@@ -9,9 +9,24 @@
 #if CS_API_MAJOR >= 5
 
 #define CSINC BPF
-#define CSINC_MODE \
-	((as->config->bits == 32)? CS_MODE_BPF_CLASSIC: CS_MODE_BPF_EXTENDED) \
-	| ((R_ARCH_CONFIG_IS_BIG_ENDIAN (as->config))? CS_MODE_BIG_ENDIAN: CS_MODE_LITTLE_ENDIAN)
+#define CSINC_MODE get_capstone_mode(as)
+
+// See-also: https://github.com/capstone-engine/capstone/commit/812e654c857348bf95ae4ab2e7db0ccf779a4cb8
+// #define BPF_INS_JA BPF_INS_JMP
+
+static int get_capstone_mode(RArchSession *as) {
+	int mode = R_ARCH_CONFIG_IS_BIG_ENDIAN (as->config)
+		? CS_MODE_BIG_ENDIAN: CS_MODE_LITTLE_ENDIAN;
+	const char *cpu = as->config->cpu;
+	if (cpu && !strcmp (cpu, "extended")) {
+		mode |= CS_MODE_BPF_EXTENDED;
+	} else if (cpu && !strcmp (cpu, "classic")) {
+		mode |= CS_MODE_BPF_CLASSIC;
+	} else {
+		mode |= (as->config->bits == 32)? CS_MODE_BPF_CLASSIC: CS_MODE_BPF_EXTENDED;
+	}
+	return mode;
+}
 #include "../capstone.inc.c"
 
 #define OP(n) insn->detail->bpf.operands[n]
@@ -635,7 +650,7 @@ static int archinfo(RArchSession *as, ut32 q) {
 }
 
 static bool init(RArchSession *s) {
-	r_return_val_if_fail (s, false);
+	R_RETURN_VAL_IF_FAIL (s, false);
 	if (s->data) {
 		R_LOG_WARN ("Already initialized");
 		return false;
@@ -651,7 +666,7 @@ static bool init(RArchSession *s) {
 }
 
 static bool fini(RArchSession *s) {
-	r_return_val_if_fail (s, false);
+	R_RETURN_VAL_IF_FAIL (s, false);
 	CapstonePluginData *cpd = (CapstonePluginData*)s->data;
 	cs_close (&cpd->cs_handle);
 	R_FREE (s->data);
@@ -661,11 +676,12 @@ static bool fini(RArchSession *s) {
 const RArchPlugin r_arch_plugin_bpf_cs = {
 	.meta = {
 		.name = "bpf",
-		.desc = "Capstone BPF plugin",
-		.license = "BSD",
-		.author = "terorie, aemmitt",
+		.desc = "Capstone BPF bytecode",
+		.license = "BSD-3-Clause",
+		.author = "terorie,aemmitt",
 	},
 	.arch = "bpf",
+	.cpus = "classic,extended",
 	.endian = R_SYS_ENDIAN_LITTLE | R_SYS_ENDIAN_BIG,
 	.bits = R_SYS_BITS_PACK2 (32, 64),
 	.info = archinfo,

@@ -1,4 +1,4 @@
-/* radare2 - LGPL - Copyright 2013-2023 - pancake */
+/* radare2 - LGPL - Copyright 2013-2024 - pancake */
 
 #include <r_arch.h>
 
@@ -612,7 +612,7 @@ static int archinfo(RArchSession *s, ut32 q) {
 }
 
 static bool init(RArchSession *s) {
-	r_return_val_if_fail (s, false);
+	R_RETURN_VAL_IF_FAIL (s, false);
 	if (s->data) {
 		R_LOG_WARN ("Already initialized");
 		return false;
@@ -628,7 +628,7 @@ static bool init(RArchSession *s) {
 }
 
 static bool fini(RArchSession *s) {
-	r_return_val_if_fail (s, false);
+	R_RETURN_VAL_IF_FAIL (s, false);
 	CapstonePluginData *cpd = (CapstonePluginData*)s->data;
 	cs_close (&cpd->cs_handle);
 	R_FREE (s->data);
@@ -643,8 +643,9 @@ static char *mnemonics(RArchSession *s, int id, bool json) {
 const RArchPlugin r_arch_plugin_riscv_cs = {
 	.meta = {
 		.name = "riscv.cs",
-		.desc = "RISC-V analysis plugin",
-		.license = "BSD",
+		.author = "pancake",
+		.desc = "Capstone's RISC-V ISA architecture",
+		.license = "Apache-2.0",
 	},
 	.arch = "riscv",
 	.endian = R_SYS_ENDIAN_LITTLE | R_SYS_ENDIAN_BIG,

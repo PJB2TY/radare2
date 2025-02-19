@@ -55,8 +55,10 @@ static bool update(RCryptoJob *cj, const ut8 *buf, int len) {
 }
 
 RCryptoPlugin r_crypto_plugin_xor = {
+	.type = R_CRYPTO_TYPE_ENCRYPT,
 	.meta = {
 		.name = "xor",
+		.desc = "Byte level Exclusive Or",
 		.author = "pancake",
 		.license = "MIT",
 	},

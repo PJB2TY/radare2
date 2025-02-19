@@ -109,7 +109,7 @@ R_API RRunProfile *r_run_new(R_NULLABLE const char *str) {
 }
 
 R_API void r_run_reset(RRunProfile *p) {
-	r_return_if_fail (p);
+	R_RETURN_IF_FAIL (p);
 	int i;
 	for (i = 0; i < R_RUN_PROFILE_NARGS; i++) {
 		R_FREE (p->_args[i]);
@@ -139,7 +139,7 @@ R_API void r_run_reset(RRunProfile *p) {
 }
 
 R_API bool r_run_parse(RRunProfile *pf, const char *profile) {
-	r_return_val_if_fail (pf && profile, false);
+	R_RETURN_VAL_IF_FAIL (pf && profile, false);
 	char *p, *o, *str = strdup (profile);
 	if (!str) {
 		return false;
@@ -542,7 +542,7 @@ static bool handle_redirection(const char *cmd, bool in, bool out, bool err) {
 }
 
 R_API bool r_run_parsefile(RRunProfile *p, const char *b) {
-	r_return_val_if_fail (p && b, false);
+	R_RETURN_VAL_IF_FAIL (p && b, false);
 	char *s = r_file_slurp (b, NULL);
 	if (s) {
 		bool ret = r_run_parse (p, s);
@@ -645,6 +645,8 @@ R_API bool r_run_parseline(RRunProfile *p, const char *b) {
 		p->_seteuid = strdup (e);
 	} else if (!strcmp (b, "setgid")) {
 		p->_setgid = strdup (e);
+	} else if (!strcmp (b, "stderrout")) {
+		p->_stderrout = r_str_is_true (e);
 	} else if (!strcmp (b, "setegid")) {
 		p->_setegid = strdup (e);
 	} else if (!strcmp (b, "nice")) {
@@ -747,6 +749,7 @@ R_API const char *r_run_help(void) {
 	"# #core=false\n"
 	"# #stdio=blah.txt\n"
 	"# #stderr=foo.txt\n"
+	"# #stderrout=false\n"
 	"# stdout=foo.txt\n"
 	"# stdin=input.txt # or !program to redirect input from another program\n"
 	"# input=input.txt\n"
@@ -1082,15 +1085,24 @@ R_API bool r_run_config_env(RRunProfile *p) {
 			return false;
 		}
 	}
+	if (p->_stderrout) {
+#if __wasi__
+		R_LOG_WARN ("Directive 'stderrout' not supported in wasm");
+#else
+		if (dup2 (1, 2) == -1) {
+			return false;
+		}
+#endif
+	}
 	if (p->_setgid) {
 #if __wasi__
-		ret = 0;
+		R_LOG_WARN ("Directive 'setgid' not supported in wasm");
 #else
 		ret = setgid (atoi (p->_setgid));
-#endif
 		if (ret < 0) {
 			return false;
 		}
+#endif
 	}
 	if (p->_input) {
 		char *inp;
@@ -1196,7 +1208,7 @@ static void time_end(bool chk, ut64 time_begin) {
 
 // NOTE: return value is like in unix return code (0 = ok, 1 = not ok)
 R_API bool r_run_start(RRunProfile *p) {
-	r_return_val_if_fail (p, false);
+	R_RETURN_VAL_IF_FAIL (p, false);
 #if LIBC_HAVE_FORK
 	if (p->_execve) {
 		exit (execv (p->_program, (char* const*)p->_args));

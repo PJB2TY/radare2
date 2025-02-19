@@ -180,9 +180,11 @@ RUN
 NAME=fatmach0 entry1 rabin2 (2)
 FILE=bins/mach0/fatmach0-3true
 ARGS=-n
-CMDS=!rabin2 -a x86 -b 32 -e bins/mach0/fatmach0-3true | grep paddr=
+CMDS=!rabin2 -a x86 -b 32 -e bins/mach0/fatmach0-3true
 EXPECT=<<EOF
-vaddr=0x00001f44 paddr=0x00005f44 haddr=0x00000420 type=program
+paddr      vaddr      phaddr     vhaddr     type
+------------------------------------------------
+0x00005f44 0x00001f44 0x00000420 ---------- program
 EOF
 RUN
 
@@ -204,11 +206,11 @@ EXPECT=<<EOF
 EOF
 RUN
 
-NAME=fatmach0 archs iA iAj
+NAME=fatmach0 archs ia iaj
 FILE=bins/mach0/fatmach0-3true
 CMDS=<<EOF
-iA
-iAj
+ia
+iaj
 EOF
 EXPECT=<<EOF
 000 0x00001000 13792 x86_64 x86 64 all
@@ -257,7 +259,6 @@ FILE=bins/mach0/fatmach0-3true
 ARGS=-a x86 -b32 -B 0x90000000
 CMDS=is
 EXPECT=<<EOF
-[Symbols]
 nth paddr      vaddr      bind   type size lib name                demangled
 ----------------------------------------------------------------------------
 0   0x00005000 0x90000000 GLOBAL FUNC 0        __mh_execute_header
@@ -273,7 +274,7 @@ CMDS=ic
 EXPECT=<<EOF
 0x100009298 [0x100001e90 - 0x100001e90]      0 objc class 0 ViewController :: UIViewController
 0x100001e90 objc   method   0      viewDidLoad
-0x1000092c0 [0x100001ee4 - 0x1000020a4]    448 objc class 0 AppDelegate :: UIResponder
+0x1000092c0 [0x100001ee4 - 0x1000020a4]    448 objc class 1 AppDelegate :: UIResponder
 0x100001ee4 objc   method   0      application:didFinishLaunchingWithOptions:
 0x100001f74 objc   method   1      application:configurationForConnectingSceneSession:options:
 0x1000020a4 objc   method   2      application:didDiscardSceneSessions:
@@ -282,7 +283,7 @@ EXPECT=<<EOF
 0x00000000 objc property   2      superclass
 0x00000000 objc property   3      description
 0x00000000 objc property   4      debugDescription
-0x100009310 [0x1000021d0 - 0x100002494]    708 objc class 0 SceneDelegate :: UIResponder
+0x100009310 [0x1000021d0 - 0x100002494]    708 objc class 2 SceneDelegate :: UIResponder
 0x1000021d0 objc   method   0      scene:willConnectToSession:options:
 0x100002280 objc   method   1      sceneDidDisconnect:
 0x1000022d4 objc   method   2      sceneDidBecomeActive:

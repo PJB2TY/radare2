@@ -6,7 +6,7 @@ bool ranal2_list(RCore *core, const char *arch, int fmt);
 
 static RCoreHelpMessage help_msg_La = {
 	"Usage:", "La[qj]", " # asm/anal plugin list",
-	"La",  "", "List asm/anal pluginsh (See rasm2 -L)",
+	"La",  "", "List asm/anal plugins (See rasm2 -L)",
 	"Laq",  "", "Only list the plugin name",
 	"Laj",  "", "Full list, but in JSON format",
 	NULL
@@ -17,7 +17,7 @@ static RCoreHelpMessage help_msg_L = {
 	"Usage:", "L[acio]", "[-name][ file]",
 	"L",  "", "show this help",
 	"L", " blah."R_LIB_EXT, "load plugin file",
-	"L-", "duk", "unload core plugin by name",
+	"L-", "duk", "unload core plugin by name or file name",
 	"La", "[qj]", "list arch plugins",
 	"LA", "[qj]", "list analysis plugins",
 	"Lb", "[qj]", "list bin plugins",
@@ -420,8 +420,12 @@ static int cmd_plugins(void *data, const char *input) {
 		}
 		break;
 	case 'b': // "Lb"
-		if (input[1] == 'j') {
-			r_bin_list (core->bin, NULL, 'j');
+		if (input[1] == 'j') { // "Lbj"
+			PJ *pj = r_core_pj_new (core);
+			r_bin_list (core->bin, pj, 'j');
+			char *s = pj_drain (pj);
+			r_cons_println (s);
+			free (s);
 		} else {
 			r_bin_list (core->bin, NULL, 0);
 		}
@@ -479,17 +483,7 @@ static int cmd_plugins(void *data, const char *input) {
 				switch (mode) {
 				case 'j':
 					pj_o (pj);
-					pj_ks (pj, "name", item->meta.name);
-					pj_ks (pj, "desc", item->meta.desc);
-					if (item->meta.author) {
-						pj_ks (pj, "author", item->meta.author);
-					}
-					if (item->meta.version) {
-						pj_ks (pj, "version", item->meta.version);
-					}
-					if (item->meta.license) {
-						pj_ks (pj, "license", item->meta.license);
-					}
+					r_lib_meta_pj (pj, &item->meta);
 					if (item->arch) {
 						pj_ks (pj, "arch", item->arch);
 					}
@@ -543,7 +537,11 @@ static int cmd_plugins(void *data, const char *input) {
 				PJ *pj = r_core_pj_new (core);
 				pj_a (pj);
 				r_list_foreach (node->options, iter, opt) {
-					pj_s (pj, opt);
+					pj_o (pj);
+					pj_ks (pj, "name", opt);
+					// TODO: parse plugin must use the meta struct
+					// pj_ks (pj, "description", opt);
+					pj_end (pj);
 				}
 				pj_end (pj);
 				char *s = pj_drain (pj);
@@ -583,15 +581,15 @@ static int cmd_plugins(void *data, const char *input) {
 		break;
 	case 'l': // "Ll"
 		if (input[1] == 'j') { // "Llj" "#!?j"
-			r_lang_list (core->lang, 'j');
+			r_core_list_lang (core, 'j');
 		} else if (input[1] == 'q') { // "Llq" "#!?q"
-			r_lang_list (core->lang, 'q');
+			r_core_list_lang (core, 'q');
 		} else if (input[1] == ',') { // "Ll,"
-			r_lang_list (core->lang, ','); // TODO: take table query as argument
+			r_core_list_lang (core, ',');
 		} else if (input[1] == '?') { // "Ll?"
 			r_cons_printf ("Usage: Ll[,jq] - list r_lang plugins\n");
 		} else {
-			r_lang_list (core->lang, 0);
+			r_core_list_lang (core, 0);
 		}
 		break;
 	case 'L': // "LL"
@@ -616,7 +614,7 @@ static int cmd_plugins(void *data, const char *input) {
 		RListIter *iter;
 		RCorePlugin *cp;
 		switch (input[1]) {
-		case 'j': {
+		case 'j': { // "Lcj"
 			PJ *pj = r_core_pj_new (core);
 			if (!pj) {
 				return 1;
@@ -624,11 +622,15 @@ static int cmd_plugins(void *data, const char *input) {
 			pj_a (pj);
 			r_list_foreach (core->rcmd->plist, iter, cp) {
 				pj_o (pj);
-				pj_ks (pj, "name", cp->meta.name);
-				pj_ks (pj, "desc", cp->meta.desc);
-				pj_ks (pj, "license", cp->meta.license? cp->meta.license: "???");
-				if (cp->meta.author) {
-					pj_ks (pj, "author", cp->meta.author);
+				r_lib_meta_pj (pj, &cp->meta);
+				if (cp->meta.name) {
+					bool found;
+					RLibPlugin *plugin = ht_pp_find (core->lib->plugins_ht, cp->meta.name, &found);
+					if (found && plugin) {
+						if (plugin->file) {
+							pj_ks (pj, "path", plugin->file);
+						}
+					}
 				}
 				pj_end (pj);
 			}
@@ -637,8 +639,26 @@ static int cmd_plugins(void *data, const char *input) {
 			pj_free (pj);
 			break;
 			}
+		case '-':
+			r_core_cmd_callf (core, "L-%s", r_str_trim_head_ro (input + 2));
+			break;
 		case ' ':
-			r_lib_open (core->lib, r_str_trim_head_ro (input + 2));
+			{
+				const char *arg = r_str_trim_head_ro (input + 2);
+				char *p = r_file_home (arg);
+				if (r_file_exists (p)) {
+					r_lib_open (core->lib, p);
+				} else {
+					if (strchr (arg, '.')) {
+						r_lib_open (core->lib, arg);
+					} else {
+						char *q = r_str_newf ("%s.%s", arg, R_LIB_EXT);
+						r_lib_open (core->lib, q);
+						free (q);
+					}
+				}
+				free (p);
+			}
 			break;
 		case 'v':
 			r_lib_list (core->lib);
@@ -653,11 +673,17 @@ static int cmd_plugins(void *data, const char *input) {
 				r_cons_printf ("%-10s %s\n", cp->meta.name, cp->meta.desc);
 			}
 			break;
-		default:
+		case '?':
 			r_core_cmd_help (core, help_msg_L);
+			break;
+		default:
+			r_core_return_invalid_command (core, "Lc", input[1]);
 			break;
 		}
 		}
+		break;
+	default:
+		r_core_return_invalid_command (core, "L", *input);
 		break;
 	}
 	return 0;

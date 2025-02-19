@@ -1,7 +1,6 @@
-/* radare - LGPL - Copyright 2016-2022 - pancake */
+/* radare - LGPL - Copyright 2016-2024 - pancake */
 
 #include <r_bin.h>
-#include <r_lib.h>
 
 #define CHECK4INSTR(b, instr, size)       \
 	if (!instr (b, 0) ||              \
@@ -91,7 +90,7 @@ static void destroy(RBinFile *bf) {
 }
 
 static RBinInfo* info(RBinFile *bf) {
-	r_return_val_if_fail (bf, NULL);
+	R_RETURN_VAL_IF_FAIL (bf, NULL);
 	RBinInfo *bi = R_NEW0 (RBinInfo);
 	if (bi) {
 		bi->file = strdup (bf->file);
@@ -176,7 +175,8 @@ RBinPlugin r_bin_plugin_avr = {
 	.meta = {
 		.name = "avr",
 		.desc = "ATmel AVR MCUs",
-		.license = "LGPL3",
+		.author = "pancake",
+		.license = "LGPL-3.0-only",
 	},
 	.load = load,
 	.destroy = destroy,
