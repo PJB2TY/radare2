@@ -1,4 +1,4 @@
-/* radare - LGPL - Copyright 2009-2023 pancake */
+/* radare - LGPL - Copyright 2009-2025 pancake */
 
 #include <r_debug.h>
 #include <config.h>
@@ -17,16 +17,16 @@ static RDebugPlugin *debug_static_plugins[] = {
 };
 
 R_API void r_debug_init_plugins(RDebug *dbg) {
-	r_return_if_fail (dbg);
-	int i;
+	R_RETURN_IF_FAIL (dbg);
 	dbg->plugins = RVecDebugPluginSession_new ();
+	int i;
 	for (i = 0; debug_static_plugins[i]; i++) {
 		r_debug_plugin_add (dbg, debug_static_plugins[i]);
 	}
 }
 
 R_API void r_debug_fini_plugins(RDebug *dbg) {
-	r_return_if_fail (dbg);
+	R_RETURN_IF_FAIL (dbg);
 	RVecDebugPluginSession_free (dbg->plugins);
 }
 
@@ -35,7 +35,8 @@ static inline int find_plugin_by_name(const RDebugPluginSession *ds, const void 
 }
 
 R_API bool r_debug_use(RDebug *dbg, const char *str) {
-	r_return_val_if_fail (dbg, false);
+	R_RETURN_VAL_IF_FAIL (dbg, false);
+	const char *aname = R_UNWRAP4 (dbg, anal, config, arch);
 	if (R_STR_ISNOTEMPTY (str)) {
 		RDebugPluginSession *ds = RVecDebugPluginSession_find (dbg->plugins, (void*)str, find_plugin_by_name);
 		if (!ds) {
@@ -46,9 +47,8 @@ R_API bool r_debug_use(RDebug *dbg, const char *str) {
 		}
 		if (ds) {
 			dbg->current = ds;
-			if (dbg->anal && dbg->anal->cur) {
-				const char *arch = dbg->anal->config->arch;
-				r_debug_set_arch (dbg, arch, dbg->bits);
+			if (aname) {
+				r_debug_set_arch (dbg, aname, dbg->bits);
 			}
 			dbg->bp->breakpoint = dbg->current->plugin->breakpoint;
 			dbg->bp->user = dbg;
@@ -72,18 +72,17 @@ R_API bool r_debug_use(RDebug *dbg, const char *str) {
 			}
 			free (p);
 		} else {
-			R_LOG_ERROR ("Cannot retrieve reg profile from debug plugin (%s)", plugin->meta.name); //dbg->current->plugin.meta.name);
+			R_LOG_ERROR ("No regprofile from debug plugin (%s) for (%s)",
+				plugin->meta.name, aname? aname: "?");
+			// r_sys_breakpoint ();
 		}
 	}
 	return dbg->current;
 }
 
 R_API bool r_debug_plugin_list(RDebug *dbg, int mode) {
-	r_return_val_if_fail (dbg, false);
+	R_RETURN_VAL_IF_FAIL (dbg, false);
 	char spaces[16];
-	int count = 0;
-	memset (spaces, ' ', 15);
-	spaces[15] = 0;
 	PJ *pj = NULL;
 	if (mode == 'j') {
 		pj = dbg->pj;
@@ -96,27 +95,23 @@ R_API bool r_debug_plugin_list(RDebug *dbg, int mode) {
 	RDebugPluginSession *ds;
 	R_VEC_FOREACH (dbg->plugins, ds) {
 		RPluginMeta meta = ds->plugin->meta;
-		int sp = 8 - strlen (meta.name);
-		spaces[sp] = 0;
+		const int sp = 8 - strlen (meta.name);
+		if (sp > 0) {
+			memset (spaces, ' ', sp);
+			spaces[sp] = 0;
+		}
 		if (mode == 'q') {
 			dbg->cb_printf ("%s\n", meta.name);
 		} else if (mode == 'j') {
 			pj_o (pj);
-			pj_ks (pj, "name", meta.name);
-			pj_ks (pj, "license", meta.license);
-			pj_ks (pj, "author", meta.author);
-			pj_ks (pj, "desc", meta.desc);
-			if (meta.version) {
-				pj_ks (pj, "version", meta.version);
-			}
+			r_lib_meta_pj (pj, &meta);
 			pj_end (pj);
 		} else {
-			dbg->cb_printf ("%d  %s  %s %s%s\n",
-				count, (ds == dbg->current)? "dbg": "---",
-				meta.name, spaces, meta.license);
+			dbg->cb_printf ("%s %s %s%s\n",
+				(ds == dbg->current)? "o": "-",
+				meta.name, spaces, meta.desc);
 		}
 		spaces[sp] = ' ';
-		count++;
 	}
 	if (mode == 'j') {
 		pj_end (pj);
@@ -126,7 +121,7 @@ R_API bool r_debug_plugin_list(RDebug *dbg, int mode) {
 }
 
 R_API bool r_debug_plugin_add(RDebug *dbg, RDebugPlugin *plugin) {
-	r_return_val_if_fail (dbg && plugin, false);
+	R_RETURN_VAL_IF_FAIL (dbg && plugin, false);
 	if (!plugin->meta.name) {
 		return false;
 	}
@@ -148,7 +143,7 @@ R_API bool r_debug_plugin_add(RDebug *dbg, RDebugPlugin *plugin) {
 }
 
 R_API bool r_debug_plugin_remove(RDebug *dbg, RDebugPlugin *plugin) {
-	r_return_val_if_fail (dbg && plugin, false);
+	R_RETURN_VAL_IF_FAIL (dbg && plugin, false);
 	RDebugPluginSession *ds = RVecDebugPluginSession_find (dbg->plugins,
 		(void*)plugin->meta.name, find_plugin_by_name);
 	if (ds) {
@@ -159,7 +154,7 @@ R_API bool r_debug_plugin_remove(RDebug *dbg, RDebugPlugin *plugin) {
 }
 
 R_API bool r_debug_plugin_set_reg_profile(RDebug *dbg, const char *profile) {
-	r_return_val_if_fail (dbg && profile, false);
+	R_RETURN_VAL_IF_FAIL (dbg && profile, false);
 	char *str = r_file_slurp (profile, NULL);
 	if (!str) {
 		R_LOG_ERROR ("r_debug_plugin_set_reg_profile: Cannot find '%s'", profile);

@@ -26,7 +26,7 @@ static int sm4_get_key_size(RCryptoJob *cry) {
 }
 
 static bool update(RCryptoJob *cj, const ut8 *buf, int len) {
-	r_return_val_if_fail (cj&& buf, false);
+	R_RETURN_VAL_IF_FAIL (cj&& buf, false);
 	ut8 *obuf = calloc (1, len);
 	if (!obuf) {
 		return false;
@@ -43,10 +43,12 @@ static bool end(RCryptoJob *cj, const ut8 *buf, int len) {
 }
 
 RCryptoPlugin r_crypto_plugin_sm4 = {
+	.type = R_CRYPTO_TYPE_ENCRYPT,
 	.meta = {
 		.name = "sm4-ecb",
+		.desc = "ShāngMì4 block cipher with Electronic Code Book mode",
 		.author = "Sylvain Pelissier",
-		.license = "LGPL3",
+		.license = "LGPL-3.0-only",
 	},
 	.implements = "sm4-ecb",
 	.set_key = sm4_set_key,

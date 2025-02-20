@@ -35,9 +35,11 @@ static int __getoffset(RBin *bin, int type, int idx) {
 
 static const char *__getname(RBin *bin, int type, int idx, bool sd) {
 	RBinFile *a = r_bin_cur (bin);
-	RBinPlugin *plugin = r_bin_file_cur_plugin (a);
-	if (plugin && plugin->get_name) {
-		return plugin->get_name (a, type, idx, sd);
+	if (a) {
+		RBinPlugin *plugin = r_bin_file_cur_plugin (a);
+		if (plugin && plugin->get_name) {
+			return plugin->get_name (a, type, idx, sd);
+		}
 	}
 	return NULL;
 }
@@ -193,8 +195,8 @@ R_API RBinSymbol *r_bin_symbol_clone(RBinSymbol *bs) {
 }
 
 // query the symbol name into the symtypes database
-R_API const char *r_bin_symbol_unsafe(RBin *bin, const char *name) {
-	Sdb *db = sdb_ns (bin->sdb, "symclass", true);
+R_API const char *r_bin_import_tags(RBin *bin, const char *name) {
+	Sdb *db = sdb_ns (bin->sdb, "symclass", true); // R2_600 - rename to imptags
 	if (db) {
 		return sdb_const_get (db, name, 0);
 	}
@@ -303,10 +305,9 @@ R_API bool r_bin_open_buf(RBin *bin, RBuffer *buf, RBinFileOptions *opt) {
 		}
 	}
 	if (!bf) {
-		// Uncomment for this speedup: 20s vs 22s
-		// RBuffer *buf = r_buf_new_slurp (bin->file);
-		bf = r_bin_file_new_from_buffer (bin, bin->file? bin->file: "?", buf, bin->rawstr,
-			opt->baseaddr, opt->loadaddr, opt->fd, opt->pluginname);
+		const char *bfile = bin->file? bin->file: "?";
+		opt->rawstr = bin->rawstr;
+		bf = r_bin_file_new_from_buffer (bin, bfile, buf, opt);
 		if (!bf) {
 			return false;
 		}
@@ -567,6 +568,7 @@ static void __printXtrPluginDetails(RBin *bin, RBinXtrPlugin *bx, int json) {
 	}
 }
 
+// TODO: move to libr/core/clist
 R_API bool r_bin_list_plugin(RBin *bin, const char* name, PJ *pj, int json) {
 	RListIter *it;
 	RBinPlugin *bp;
@@ -610,7 +612,7 @@ R_API void r_bin_list(RBin *bin, PJ *pj, int format) {
 		r_list_foreach (bin->binxtrs, it, bx) {
 			bin->cb_printf ("%s\n", bx->meta.name);
 		}
-	} else if (format) {
+	} else if (pj) {
 		pj_o (pj);
 		pj_ka (pj, "bin");
 		r_list_foreach (bin->plugins, it, bp) {
@@ -642,20 +644,16 @@ R_API void r_bin_list(RBin *bin, PJ *pj, int format) {
 		pj_end (pj);
 	} else {
 		r_list_foreach (bin->plugins, it, bp) {
-			bin->cb_printf ("bin  %-11s %s (%s) %s %s\n",
-				bp->meta.name, bp->meta.desc, r_str_get_fail (bp->meta.license, "???"),
-				r_str_get (bp->meta.version),
-				r_str_get (bp->meta.author));
+			bin->cb_printf ("bin  %-11s %s\n", bp->meta.name, bp->meta.desc);
+			// bin->cb_printf ("bin  %-11s %s %s %s\n", bp->meta.name, bp->meta.desc, r_str_get (bp->meta.version), r_str_get (bp->meta.author));
 		}
 		r_list_foreach (bin->binxtrs, it, bx) {
 			const char *name = strncmp (bx->meta.name, "xtr.", 4)? bx->meta.name : bx->meta.name + 3;
-			bin->cb_printf ("xtr  %-11s %s (%s)\n", name,
-				bx->meta.desc, r_str_get_fail (bx->meta.license, "???"));
+			bin->cb_printf ("xtr  %-11s %s\n", name, bx->meta.desc);
 		}
 		r_list_foreach (bin->binldrs, it, ld) {
 			const char *name = strncmp (ld->meta.name, "ldr.", 4)? ld->meta.name : ld->meta.name + 3;
-			bin->cb_printf ("ldr  %-11s %s (%s)\n", name,
-				ld->meta.desc, r_str_get_fail (ld->meta.license, "???"));
+			bin->cb_printf ("ldr  %-11s %s\n", name, ld->meta.desc);
 		}
 	}
 	if (local_pj) {
@@ -1044,7 +1042,7 @@ static char *get_arch_string(const char *arch, int bits, RBinInfo *info) {
 	return r_strbuf_drain (sb);
 }
 
-R_API void r_bin_list_archs(RBin *bin, PJ *pj, int mode) {
+R_API void r_bin_list_archs(RBin *bin, PJ *pj, RTable *t, int mode) {
 	R_RETURN_IF_FAIL (bin);
 
 	char unk[128];
@@ -1072,7 +1070,7 @@ R_API void r_bin_list_archs(RBin *bin, PJ *pj, int mode) {
 	if (!nbinfile) {
 		return;
 	}
-	RTable *table = r_table_new ("bins");
+	RTable *table = t? t: r_table_new ("bins");
 	const char *fmt = "dXnss";
 	if (mode == 'j') {
 		pj_ka (pj, "bins");
@@ -1243,7 +1241,7 @@ R_API RBuffer *r_bin_create(RBin *bin, const char *p,
 R_API RBuffer *r_bin_package(RBin *bin, const char *type, const char *file, RList *files) {
 	if (!strcmp (type, "zip")) {
 		// XXX: implement me
-		r_warn_if_reached ();
+		R_WARN_IF_REACHED ();
 	} else if (!strcmp (type, "fat")) {
 		// XXX: this should be implemented in the fat plugin, not here
 		// XXX should pick the callback from the plugin list
@@ -1318,6 +1316,7 @@ R_API ut64 r_bin_get_vaddr(RBin *bin, ut64 paddr, ut64 vaddr) {
 	}
 	/* hack to realign thumb symbols */
 	if (bin->cur->bo && bin->cur->bo->info && bin->cur->bo->info->arch) {
+		// TODO: honor fixedbits and fixedarch
 		if (bin->cur->bo->info->bits == 16) {
 			RBinSection *s = r_bin_get_section_at (bin->cur->bo, paddr, false);
 			// autodetect thumb
@@ -1551,7 +1550,8 @@ R_API char *r_bin_name_tostring2(RBinName *bn, int type) {
 	}
 	if (type == 'd' && bn->name) {
 		return bn->name;
-	} else if (type == 'f' && bn->fname) {
+	}
+	if (type == 'f' && bn->fname) {
 		if (bn->fname) {
 			return bn->fname;
 		}
@@ -1685,7 +1685,49 @@ R_API char *r_bin_attr_tostring(ut64 attr, bool singlechar) {
 	return r_strbuf_drain (sb);
 }
 
-// TODO : not implemented yet
-R_API ut64 r_bin_attr_fromstring(const char *s) {
-	return 0ULL;
+R_API ut64 r_bin_attr_fromstring(const char *s, bool compact) {
+	size_t i;
+	ut64 bits = 0LL;
+	const char *word;
+	RListIter *iter;
+	if (compact) {
+		const char *w = s;
+		while (*w) {
+			for (i = 0; i < 64; i++) {
+				const char *bn = attr_bit_name (i, true);
+				if (bn && *w == *bn) {
+					bits |= (1ULL << i);
+					break;
+				}
+			}
+			w++;
+		}
+	} else {
+		char *a = strdup (s);
+		RList *words = r_str_split_list (a, " ", 0);
+		r_list_foreach (words, iter, word) {
+			for (i = 0; i < 64; i++) {
+				const char *bn = attr_bit_name (i, false);
+				if (!strcmp (bn, word)) {
+					bits |= (1ULL << i);
+					break;
+				}
+			}
+		}
+		r_list_free (words);
+		free (a);
+	}
+	return bits;
+}
+
+// TODO: Must be a RBinFile.cmd() instead
+R_API bool r_bin_command(RBin *bin, const char *input) {
+	RBinFile *a = r_bin_cur (bin);
+	if (a) {
+		RBinPlugin *plugin = r_bin_file_cur_plugin (a);
+		if (plugin && plugin->cmd) {
+			return plugin->cmd(a, input);
+		}
+	}
+	return false;
 }

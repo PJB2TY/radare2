@@ -20,7 +20,7 @@ static bool base91_check(const char *algo) {
 }
 
 static bool update(RCryptoJob *cj, const ut8 *buf, int len) {
-	r_return_val_if_fail (cj && buf && len > 0, false);
+	R_RETURN_VAL_IF_FAIL (cj && buf && len > 0, false);
 
 	int olen = INSIZE;
 	ut8 *obuf = calloc (1, olen);
@@ -42,6 +42,7 @@ static bool update(RCryptoJob *cj, const ut8 *buf, int len) {
 
 RCryptoPlugin r_crypto_plugin_base91 = {
 	.meta = {
+		.desc = "Binary to text encoding scheme using 91 ascii characters",
 		.name = "base91",
 		.author = "rakholiyajenish.07",
 		.license = "MIT",

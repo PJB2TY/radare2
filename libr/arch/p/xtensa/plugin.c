@@ -2102,7 +2102,7 @@ static int archinfo(RArchSession *as, ut32 q) {
 }
 
 static bool init(RArchSession *as) {
-	r_return_val_if_fail (as, false);
+	R_RETURN_VAL_IF_FAIL (as, false);
 	if (as->data) {
 		R_LOG_WARN ("Already initialized");
 		return false;
@@ -2113,7 +2113,7 @@ static bool init(RArchSession *as) {
 }
 
 static bool fini(RArchSession *as) {
-	r_return_val_if_fail (as, false);
+	R_RETURN_VAL_IF_FAIL (as, false);
 	R_FREE (as->data);
 	return true;
 }
@@ -2121,8 +2121,8 @@ static bool fini(RArchSession *as) {
 const RArchPlugin r_arch_plugin_xtensa = {
 	.meta = {
 		.name = "xtensa",
-		.desc = "Xtensa disassembler",
-		.license = "LGPL3",
+		.desc = "Tensilica's Xtensa modular RISC architecture",
+		.license = "LGPL-3.0-only",
 	},
 	.endian = R_SYS_ENDIAN_LITTLE | R_SYS_ENDIAN_BIG,
 	.info = archinfo,

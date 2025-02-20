@@ -558,8 +558,20 @@ err_r_sys_get_env:
 #endif
 }
 
+R_API void r_sys_setenv_asbool(const char *key, bool v) {
+	R_RETURN_IF_FAIL (key);
+	r_sys_setenv (key, v? "1": "0");
+}
+
+R_API void r_sys_setenv_asut64(const char *key, ut64 n) {
+	R_RETURN_IF_FAIL (key);
+	char *env = r_str_newf ("%"PFMT64d, n);
+	r_sys_setenv (key, env);
+	free (env);
+}
+
 R_API bool r_sys_getenv_asbool(const char *key) {
-	r_return_val_if_fail (key, false);
+	R_RETURN_VAL_IF_FAIL (key, false);
 	char *env = r_sys_getenv (key);
 	const bool res = env && r_str_is_true (env);
 	free (env);
@@ -567,7 +579,7 @@ R_API bool r_sys_getenv_asbool(const char *key) {
 }
 
 R_API ut64 r_sys_getenv_asut64(const char *key) {
-	r_return_val_if_fail (key, false);
+	R_RETURN_VAL_IF_FAIL (key, false);
 	char *env = r_sys_getenv (key);
 	const ut64 res = env? r_num_math (NULL, env): 0;
 	free (env);
@@ -575,7 +587,7 @@ R_API ut64 r_sys_getenv_asut64(const char *key) {
 }
 
 R_API int r_sys_getenv_asint(const char *key) {
-	r_return_val_if_fail (key, false);
+	R_RETURN_VAL_IF_FAIL (key, false);
 	char *env = r_sys_getenv (key);
 	const int res = env? atoi (env): 0;
 	free (env);
@@ -724,7 +736,7 @@ R_API int r_sys_cmd_str_full(const char *cmd, const char *input, int ilen, char 
 		}
 		close (sh_err[1]);
 		close (sh_in[0]);
-		if (!inputptr || !*inputptr) {
+		if (R_STR_ISEMPTY (inputptr)) {
 			close (sh_in[1]);
 		}
 		// we should handle broken pipes somehow better
@@ -834,7 +846,7 @@ R_API int r_sys_cmdf(const char *fmt, ...) {
 	int ret;
 	char cmd[4096];
 	va_list ap;
-	va_start(ap, fmt);
+	va_start (ap, fmt);
 	vsnprintf (cmd, sizeof (cmd), fmt, ap);
 	ret = r_sys_cmd (cmd);
 	va_end (ap);
@@ -1002,7 +1014,7 @@ R_API bool r_sys_arch_match(const char *archstr, const char *arch) {
 }
 
 R_API int r_sys_arch_id(const char *arch) {
-	r_return_val_if_fail (arch, 0);
+	R_RETURN_VAL_IF_FAIL (arch, 0);
 	int i;
 	for (i = 0; arch_bit_array[i].name; i++) {
 		if (!strcmp (arch, arch_bit_array[i].name)) {
@@ -1067,6 +1079,7 @@ R_API int r_sys_run(const ut8 *buf, int len) {
 	return ret;
 }
 
+// TODO. maybe this should be moved into socket/run?
 R_API int r_sys_run_rop(const ut8 *buf, int len) {
 #if USE_FORK
 	int st;
@@ -1341,7 +1354,7 @@ R_API int r_sys_getpid(void) {
 
 R_API bool r_sys_tts(const char *txt, bool bg) {
 	int i;
-	r_return_val_if_fail (txt, false);
+	R_RETURN_VAL_IF_FAIL (txt, false);
 	const char *says[] = {
 		"say", "termux-tts-speak", NULL
 	};
@@ -1391,14 +1404,12 @@ R_API RSysInfo *r_sys_info(void) {
 	struct utsname un = {{0}};
 	if (uname (&un) != -1) {
 		RSysInfo *si = R_NEW0 (RSysInfo);
-		if (si) {
-			si->sysname  = strdup (un.sysname);
-			si->nodename = strdup (un.nodename);
-			si->release  = strdup (un.release);
-			si->version  = strdup (un.version);
-			si->machine  = strdup (un.machine);
-			return si;
-		}
+		si->sysname  = strdup (un.sysname);
+		si->nodename = strdup (un.nodename);
+		si->release  = strdup (un.release);
+		si->version  = strdup (un.version);
+		si->machine  = strdup (un.machine);
+		return si;
 	}
 #elif R2__WINDOWS__
 	HKEY key;
@@ -1408,10 +1419,6 @@ R_API RSysInfo *r_sys_info(void) {
 	DWORD minor;
 	char tmp[256] = {0};
 	RSysInfo *si = R_NEW0 (RSysInfo);
-	if (!si) {
-		return NULL;
-	}
-
 	if (RegOpenKeyExA (HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", 0,
 		KEY_QUERY_VALUE, &key) != ERROR_SUCCESS) {
 		r_sys_perror ("r_sys_info/RegOpenKeyExA");

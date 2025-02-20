@@ -1,4 +1,4 @@
-/* radare - LGPL - Copyright 2009-2023 - pancake, defragger */
+/* radare - LGPL - Copyright 2009-2024 - pancake, defragger */
 
 #include <r_core.h>
 #include <libgdbr.h>
@@ -269,7 +269,7 @@ static RList *r_debug_gdb_map_get(RDebug* dbg) { // TODO
 		map_start = r_num_get (NULL, region1);
 		map_end = r_num_get (NULL, region2);
 		if (map_start == map_end || map_end == 0) {
-			R_LOG_WARN ("%s: ignoring invalid map size: %s - %s", region1, region2);
+			R_LOG_WARN ("ignoring invalid map size: %s - %s", region1, region2);
 			ptr = r_str_tok_r (NULL, "\n", &save_ptr);
 			continue;
 		}
@@ -343,8 +343,7 @@ static bool gdb_reg_write(RDebug *dbg, int type, const ut8 *buf, int size) {
 	}
 	int buflen = 0;
 	int bits = dbg->anal->config->bits;
-	const char *pcname = r_reg_get_name (dbg->anal->reg, R_REG_NAME_PC);
-	RRegItem *reg = r_reg_get (dbg->anal->reg, pcname, 0);
+	RRegItem *reg = r_reg_get (dbg->anal->reg, "PC", 0);
 	if (reg) {
 		if (bits != reg->size) {
 			bits = reg->size;
@@ -643,7 +642,7 @@ static RList* r_debug_gdb_frames(RDebug *dbg, ut64 at) {
 }
 
 static bool init_plugin(RDebug *dbg, RDebugPluginSession *ds) {
-	r_return_val_if_fail (dbg && ds, false);
+	R_RETURN_VAL_IF_FAIL (dbg && ds, false);
 
 	PluginData *pd = R_NEW0 (PluginData);
 	if (!pd) {
@@ -657,7 +656,7 @@ static bool init_plugin(RDebug *dbg, RDebugPluginSession *ds) {
 }
 
 static bool fini_plugin(RDebug *dbg, RDebugPluginSession *ds) {
-	r_return_val_if_fail (dbg && ds, false);
+	R_RETURN_VAL_IF_FAIL (dbg && ds, false);
 
 	PluginData *pd = ds->plugin_data;
 	if (!pd) {
@@ -676,11 +675,11 @@ RDebugPlugin r_debug_plugin_gdb = {
 		.name = "gdb",
 		.author = "pancake, defragger",
 		.desc = "gdb debug plugin",
-		.license = "LGPL3",
+		.license = "LGPL-3.0-only",
 	},
 	/* TODO: Add support for more architectures here */
 	.arch = "x86,arm,sh,mips,avr,lm32,v850,ba2",
-	.bits = R_SYS_BITS_16 | R_SYS_BITS_32 | R_SYS_BITS_64,
+	.bits = R_SYS_BITS_PACK3 (16, 32, 64),
 	.init_plugin = init_plugin,
 	.fini_plugin = fini_plugin,
 	.step = r_debug_gdb_step,

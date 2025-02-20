@@ -1,4 +1,4 @@
-/* radare - LGPL - Copyright 2009-2024 - nibble, pancake, luctielen */
+/* radare - LGPL - Copyright 2009-2025 - nibble, pancake, luctielen */
 
 #define R_LOG_ORIGIN "bin.elf"
 
@@ -11,7 +11,7 @@
 static RBinInfo* info(RBinFile *bf);
 
 static RList *maps(RBinFile *bf) {
-	r_return_val_if_fail (bf && bf->bo, NULL);
+	R_RETURN_VAL_IF_FAIL (bf && bf->bo, NULL);
 	return Elf_(get_maps)(bf->bo->bin_obj);
 }
 
@@ -61,19 +61,7 @@ static bool load(RBinFile *bf, RBuffer *buf, ut64 loadaddr) {
 }
 
 static void destroy(RBinFile *bf) {
-	ELFOBJ* eo = bf->bo->bin_obj;
-	if (eo && eo->imports_by_ord) {
-		int i;
-		for (i = 0; i < eo->imports_by_ord_size; i++) {
-			RBinImport *imp = eo->imports_by_ord[i];
-			if (imp) {
-				r_bin_import_free (eo->imports_by_ord[i]);
-				eo->imports_by_ord[i] = NULL;
-			}
-		}
-		R_FREE (eo->imports_by_ord);
-	}
-	Elf_(free) (eo);
+	Elf_(free) ((ELFOBJ*)bf->bo->bin_obj);
 }
 
 static ut64 baddr(RBinFile *bf) {
@@ -116,7 +104,7 @@ static RBinAddr* binsym(RBinFile *bf, int sym) {
 
 #if R2_590
 static bool sections_vec(RBinFile *bf) {
-	r_return_val_if_fail (bf && bf->bo, false);
+	R_RETURN_VAL_IF_FAIL (bf && bf->bo, false);
 	ELFOBJ *eo = bf->bo->bin_obj
 	return eo? Elf_(load_sections) (bf, eo) != NULL: false;
 }
@@ -149,7 +137,7 @@ static RList* sections(RBinFile *bf) {
 #endif
 
 static RBinAddr* newEntry(RBinFile *bf, ut64 hpaddr, ut64 hvaddr, ut64 vaddr, int type, int bits) {
-	r_return_val_if_fail (bf && bf->bo && bf->bo->bin_obj, NULL);
+	R_RETURN_VAL_IF_FAIL (bf && bf->bo && bf->bo->bin_obj, NULL);
 
 	RBinAddr *ptr = R_NEW0 (RBinAddr);
 	if (ptr) {
@@ -245,7 +233,7 @@ static void process_constructors(RBinFile *bf, RList *ret, int bits) {
 }
 
 static RList* entries(RBinFile *bf) {
-	r_return_val_if_fail (bf && bf->bo && bf->bo->bin_obj, NULL);
+	R_RETURN_VAL_IF_FAIL (bf && bf->bo && bf->bo->bin_obj, NULL);
 
 	RList *ret = r_list_newf ((RListFree)free);
 	if (!ret) {
@@ -354,7 +342,7 @@ static RList* entries(RBinFile *bf) {
 // fill bf->bo->symbols_vec (RBinSymbol) with the processed contents of eo->g_symbols_vec (RBinElfSymbol)
 // thats kind of dup because rbinelfsymbol shouldnt exist, rbinsymbol should be enough, rvec makes this easily typed
 static bool symbols_vec(RBinFile *bf) {
-	r_return_val_if_fail (bf && bf->bo && bf->bo->bin_obj, false);
+	R_RETURN_VAL_IF_FAIL (bf && bf->bo && bf->bo->bin_obj, false);
 
 	ELFOBJ *eo = bf->bo->bin_obj;
 	// traverse symbols
@@ -415,7 +403,7 @@ static bool symbols_vec(RBinFile *bf) {
 }
 
 static RList* imports(RBinFile *bf) {
-	r_return_val_if_fail (bf && bf->bo, NULL);
+	R_RETURN_VAL_IF_FAIL (bf && bf->bo, NULL);
 
 	RList *ret = r_list_newf ((RListFree)r_bin_import_free);
 	if (!ret) {
@@ -446,7 +434,7 @@ static RList* imports(RBinFile *bf) {
 }
 
 static RList* libs(RBinFile *bf) {
-	r_return_val_if_fail (bf && bf->bo && bf->bo->bin_obj, NULL);
+	R_RETURN_VAL_IF_FAIL (bf && bf->bo && bf->bo->bin_obj, NULL);
 
 	RList *ret = r_list_newf (free);
 	if (!ret) {
@@ -465,7 +453,7 @@ static RList* libs(RBinFile *bf) {
 }
 
 static RBinReloc *reloc_convert(ELFOBJ* eo, RBinElfReloc *rel, ut64 got_addr) {
-	r_return_val_if_fail (eo && rel, NULL);
+	R_RETURN_VAL_IF_FAIL (eo && rel, NULL);
 	ut64 B = eo->baddr;
 	ut64 P = rel->rva; // rva has taken baddr into account
 	RBinReloc *r = R_NEW0 (RBinReloc);
@@ -489,7 +477,7 @@ static RBinReloc *reloc_convert(ELFOBJ* eo, RBinElfReloc *rel, ut64 got_addr) {
 	r->laddr = rel->laddr;
 
 	#define SET(T) r->type = R_BIN_RELOC_ ## T; r->additive = 0; return r
-	#define ADD(T, A) r->type = R_BIN_RELOC_ ## T; r->addend += A; r->additive = rel->mode == DT_RELA; return r
+	#define ADD(T, A) r->type = R_BIN_RELOC_ ## T; if (!ST32_ADD_OVFCHK (r->addend, A)) { r->addend += A; } r->additive = rel->mode == DT_RELA; return r
 
 	switch (eo->ehdr.e_machine) {
 	case EM_S390:
@@ -696,6 +684,10 @@ static RBinReloc *reloc_convert(ELFOBJ* eo, RBinElfReloc *rel, ut64 got_addr) {
 			break;
 		}
 		break;
+	case EM_LOONGARCH:
+		// 3 and 5 :: switch (rel->type) {
+		ADD (32, 0);
+		break;
 	case EM_MIPS:
 		ADD (32, 0);
 		break;
@@ -715,10 +707,13 @@ static RBinReloc *reloc_convert(ELFOBJ* eo, RBinElfReloc *rel, ut64 got_addr) {
 }
 
 static RList* relocs(RBinFile *bf) {
-	r_return_val_if_fail (bf && bf->bo && bf->bo->bin_obj, NULL);
-	RList *ret = NULL;
+	R_RETURN_VAL_IF_FAIL (bf && bf->bo && bf->bo->bin_obj, NULL);
 	ELFOBJ *eo = bf->bo->bin_obj;
-	if (!(ret = r_list_newf (free))) {
+	if (eo->relocs_list) {
+		return eo->relocs_list;
+	}
+	RList *ret = r_list_newf (free);
+	if (!ret) {
 		return NULL;
 	}
 
@@ -766,7 +761,9 @@ static RList* relocs(RBinFile *bf) {
 		}
 	}
 	ht_up_free (reloc_ht);
-	return ret;
+	eo->relocs_list = ret;
+	ret->free = NULL; // already freed in the hashtable
+	return r_list_clone (eo->relocs_list, NULL);
 }
 
 static void _patch_reloc(ELFOBJ *bo, ut16 e_machine, RIOBind *iob, RBinElfReloc *rel, ut64 S, ut64 B, ut64 L) {
@@ -788,11 +785,10 @@ static void _patch_reloc(ELFOBJ *bo, ut16 e_machine, RIOBind *iob, RBinElfReloc 
 	case EM_ARM:
 		if (!rel->sym && rel->mode == DT_REL) {
 			iob->read_at (iob->io, rel->rva, buf, 4);
-			V = r_read_ble32 (buf, bo->endian);
 		} else {
 			V = S + A;
+			r_write_ble32 (buf, V, bo->endian);
 		}
-		r_write_le32 (buf, V);
 		iob->overlay_write_at (iob->io, rel->rva, buf, 4);
 		break;
 	case EM_AARCH64:
@@ -975,7 +971,7 @@ static void _patch_reloc(ELFOBJ *bo, ut16 e_machine, RIOBind *iob, RBinElfReloc 
 }
 
 static RList* patch_relocs(RBinFile *bf) {
-	r_return_val_if_fail (bf && bf->rbin, NULL);
+	R_RETURN_VAL_IF_FAIL (bf && bf->rbin, NULL);
 	RBinReloc *ptr = NULL;
 	RBin *b = bf->rbin;
 	RIO *io = b->iob.io;
@@ -1088,6 +1084,7 @@ static void lookup_symbols(RBinFile *bf, RBinInfo *ret) {
 	RVecRBinSymbol* symbols = &bf->bo->symbols_vec;
 	RBinSymbol *symbol;
 	bool is_rust = false;
+	bool is_dart = false;
 	if (symbols) {
 		R_VEC_FOREACH (symbols, symbol) {
 			if (ret->has_canary && is_rust) {
@@ -1105,6 +1102,9 @@ static void lookup_symbols(RBinFile *bf, RBinInfo *ret) {
 			if (!is_rust && !strcmp (oname, "__rust_oom")) {
 				is_rust = true;
 				ret->lang = "rust";
+			} else if (!is_dart && !strcmp (oname, "_kDartVmSnapshotInstructions")) {
+				is_dart = true;
+				ret->lang = "dart";
 			}
 		}
 		// symbols->free = r_bin_symbol_free;
@@ -1179,6 +1179,7 @@ static RBinInfo* info(RBinFile *bf) {
 		ret->rpath = strdup ("NONE");
 	}
 	if (!(str = Elf_(get_file_type) (obj))) {
+		free (ret->rpath);
 		free (ret);
 		return NULL;
 	}
@@ -1187,26 +1188,38 @@ static RBinInfo* info(RBinFile *bf) {
 	ret->has_lit = true;
 	ret->has_sanitizers = has_sanitizers (bf);
 	if (!(str = Elf_(get_elf_class) (obj))) {
+		free (ret->rpath);
 		free (ret);
 		return NULL;
 	}
 	ret->bclass = str;
 	if (!(str = Elf_(get_osabi_name) (obj))) {
+		free (ret->rpath);
+		free (ret->type);
 		free (ret);
 		return NULL;
 	}
 	ret->os = str;
 	if (!(str = Elf_(get_osabi_name) (obj))) {
+		free (ret->rpath);
+		free (ret->type);
 		free (ret);
 		return NULL;
 	}
 	ret->subsystem = str;
 	if (!(str = Elf_(get_machine_name) (obj))) {
+		free (ret->rpath);
+		free (ret->type);
+		free (ret->os);
 		free (ret);
 		return NULL;
 	}
 	ret->machine = str;
 	if (!(str = Elf_(get_arch) (obj))) {
+		free (ret->subsystem);
+		free (ret->rpath);
+		free (ret->type);
+		free (ret->os);
 		free (ret);
 		return NULL;
 	}

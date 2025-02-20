@@ -68,6 +68,8 @@ static inline ut64 r_num_bitmask(ut8 width) {
 	return ((ut64)1ULL << (ut64)width) - 1;
 }
 
+// R2_600 - make this an api instead of a define
+#define r_num_failed(x) ((x)->nc.errors)
 R_API RNum *r_num_new(RNumCallback cb, RNumCallback2 cb2, void *ptr);
 R_API void r_num_free(RNum *num);
 R_API char *r_num_units(char *buf, size_t len, ut64 number);
@@ -90,6 +92,7 @@ R_API ut64 r_num_get(RNum *num, const char *str);
 R_API int r_num_to_bits(char *out, ut64 num);
 R_API int r_num_to_ternary(char *out, ut64 num);
 R_API int r_num_rand(int max);
+R_API ut64 r_num_genmask(int max);
 R_API void r_num_irand(void);
 R_API ut64 r_get_input_num_value(RNum *num, const char *input_value);
 R_API bool r_is_valid_input_num_value(RNum *num, const char *input_value);

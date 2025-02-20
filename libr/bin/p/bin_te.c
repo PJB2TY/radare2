@@ -1,8 +1,5 @@
-/* radare - LGPL - Copyright 2013-2019 - xvilka */
+/* radare - LGPL - Copyright 2013-2024 - xvilka */
 
-#include <r_types.h>
-#include <r_util.h>
-#include <r_lib.h>
 #include <r_bin.h>
 #include "te/te_specs.h"
 #include "te/te.h"
@@ -17,7 +14,7 @@ static Sdb *get_sdb(RBinFile *bf) {
 }
 
 static bool load(RBinFile *bf, RBuffer *b, ut64 loadaddr) {
-	r_return_val_if_fail (bf && b, false);
+	R_RETURN_VAL_IF_FAIL (bf && b, false);
 	ut64 sz = r_buf_size (b);
 	if (sz == 0 || sz == UT64_MAX) {
 		return false;
@@ -108,7 +105,7 @@ static RList *sections(RBinFile *bf) {
 		/* All TE files have _TEXT_RE section, which is 16-bit, because of
 		 * CPU start in this mode */
 		if (!strncmp (ptr->name, "_TEXT_RE", 8)) {
-			ptr->bits = R_SYS_BITS_16;
+			ptr->bits = R_SYS_BITS_PACK (16);
 		}
 		r_list_append (ret, ptr);
 	}
@@ -117,7 +114,7 @@ static RList *sections(RBinFile *bf) {
 }
 
 static RBinInfo *info(RBinFile *bf) {
-	r_return_val_if_fail (bf, NULL);
+	R_RETURN_VAL_IF_FAIL (bf, NULL);
 	RBinInfo *ret = R_NEW0 (RBinInfo);
 	if (!ret) {
 		return NULL;
@@ -152,8 +149,9 @@ static bool check(RBinFile *bf, RBuffer *b) {
 RBinPlugin r_bin_plugin_te = {
 	.meta = {
 		.name = "te",
-		.desc = "TE bin plugin", // Terse Executable format
-		.license = "LGPL3",
+		.author = "xvilka",
+		.desc = "Terse Executable format",
+		.license = "LGPL-3.0-only",
 	},
 	.get_sdb = &get_sdb,
 	.load = &load,

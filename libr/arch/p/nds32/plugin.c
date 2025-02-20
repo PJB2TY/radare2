@@ -1,4 +1,5 @@
-/* radare - MIT - Copyright 2023 - pancake, decaduto */
+/* radare - MIT - Copyright 2023-2024 - pancake, decaduto */
+
 #include <r_arch.h>
 #include <r_lib.h>
 
@@ -101,7 +102,7 @@ DECLARE_GENERIC_PRINT_ADDRESS_FUNC_NOGLOBALS()
 DECLARE_GENERIC_FPRINTF_FUNC_NOGLOBALS()
 
 static bool _init(RArchSession *as) {
-	r_return_val_if_fail (as, false);
+	R_RETURN_VAL_IF_FAIL (as, false);
 	if (as->data) {
 		R_LOG_WARN ("Already initialized");
 		return false;
@@ -329,8 +330,8 @@ static char *regs(RArchSession *as) {
 const RArchPlugin r_arch_plugin_nds32 = {
 	.meta = {
 		.name = "nds32",
-		.author = "Edoardo Mantovani",
-		.license = "GPL3",
+		.author = "decaduto,pancake",
+		.license = "GPL-3.0-only",
 		.desc = "Binutils based nds32 disassembler",
 	},
 	.arch = "nds32",

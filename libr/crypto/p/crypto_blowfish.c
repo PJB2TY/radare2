@@ -314,7 +314,7 @@ static int blowfish_get_key_size(RCryptoJob *cj) {
 }
 
 static bool update(RCryptoJob *cj, const ut8 *buf, int len) {
-	r_return_val_if_fail (cj && cj->data && buf, false);
+	R_RETURN_VAL_IF_FAIL (cj && cj->data && buf, false);
 	struct blowfish_state *st = get_st (cj);
 	ut8 *obuf = calloc (1, len);
 	if (!obuf) {
@@ -337,10 +337,12 @@ static bool end(RCryptoJob *cj, const ut8 *buf, int len) {
 }
 
 RCryptoPlugin r_crypto_plugin_blowfish = {
+	.type = R_CRYPTO_TYPE_ENCRYPT,
 	.meta = {
 		.name = "blowfish",
-		.license = "LGPL3",
-		.author = "pancake"
+		.license = "LGPL-3.0-only",
+		.author = "pancake",
+		.desc = "Bruce Schneier's symetric-key block cipher",
 	},
 	.implements = "blowfish",
 	.set_key = blowfish_set_key,

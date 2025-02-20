@@ -1,4 +1,4 @@
-/* radare - LGPL - Copyright 2016-2023 - Oscar Salvador */
+/* radare - LGPL - Copyright 2016-2024 - Oscar Salvador */
 
 #include <r_bin.h>
 #include <r_io.h>
@@ -38,7 +38,7 @@ static int search_old_relocation(struct reloc_struct_t *reloc_table, ut32 addr_t
 }
 
 static RList *patch_relocs(RBinFile *bf) {
-	r_return_val_if_fail (bf && bf->rbin && bf->rbin->iob.io, NULL);
+	R_RETURN_VAL_IF_FAIL (bf && bf->rbin && bf->rbin->iob.io, NULL);
 	struct r_bin_bflt_obj *bin = NULL;
 	RBin *b = bf->rbin;
 	RBinObject *obj = r_bin_cur_object (b);
@@ -119,6 +119,9 @@ static ut32 get_ngot_entries(struct r_bin_bflt_obj *obj) {
 
 static RList *relocs(RBinFile *bf) {
 	struct r_bin_bflt_obj *obj = (struct r_bin_bflt_obj *) bf->bo->bin_obj;
+	if (obj->relocs_list) {
+		return r_list_clone (obj->relocs_list, NULL);
+	}
 	RList *list = r_list_newf ((RListFree) free);
 	ut32 i, len, n_got, amount;
 	if (!list || !obj) {
@@ -223,7 +226,8 @@ static RList *relocs(RBinFile *bf) {
 		free (reloc_pointer_table);
 		obj->reloc_table = reloc_table;
 	}
-	return list;
+	obj->relocs_list = list;
+	return r_list_clone (list, NULL);
 out_error:
 	r_list_free (list);
 	return NULL;
@@ -264,7 +268,7 @@ RBinPlugin r_bin_plugin_bflt = {
 		.name = "bflt",
 		.author = "Oscar Salvador",
 		.desc = "bFLT format r_bin plugin",
-		.license = "LGPL3",
+		.license = "LGPL-3.0-only",
 	},
 	.load = &load,
 	.destroy = &destroy,

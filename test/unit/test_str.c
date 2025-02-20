@@ -1,8 +1,17 @@
 #include <r_util.h>
 #include "minunit.h"
 
-//TODO test r_str_chop_path
+bool test_r_file(void) {
+	char *s = r_file_new ("/foo", "bar", NULL);
+	mu_assert_streq (s, "/foo/bar", "error, invalid path");
+	free (s);
+	s = r_file_new ("/foo/", "bar", NULL);
+	mu_assert_streq (s, "/foo/bar", "error, invalid path");
+	free (s);
+	mu_end;
+}
 
+//TODO test r_str_chop_path
 bool test_r_str_wrap(void) {
 	char *s = r_str_wrap ("hello world\nhow are you\n", 5);
 	char *res = strdup ("hello \nworld\nhow ar\ne you\n");
@@ -75,14 +84,16 @@ bool test_r_str_rwx(void) {
 	int rw =  r_str_rwx ("rw-");
 	int rx = r_str_rwx ("rx");
 	int none = r_str_rwx ("---");
+	int invalid = r_str_rwx ("invalid");
 	int number = r_str_rwx ("999");
 	int rx_number = r_str_rwx ("5");
 	int rwx_number = r_str_rwx ("7");
 	mu_assert_eq (rwx, 7, "rwx");
 	mu_assert_eq (rw, 6, "rw");
 	mu_assert_eq (rx, 5, "rx");
-	mu_assert_eq (none, -1, "no permissions");
-	mu_assert_eq (number, 0, "large input number string");
+	mu_assert_eq (none, 0, "no permissions");
+	mu_assert_eq (invalid, -1, "invalid permissions string");
+	mu_assert_eq (number, -1, "large input number string");
 	mu_assert_eq (rx_number, 5, "rx number");
 	mu_assert_eq (rwx_number, 7, "rwx number");
 	mu_end;
@@ -671,7 +682,17 @@ bool test_r_mem_to_binstring(void) {
 	mu_end;
 }
 
+bool test_r_str_ndup_zero_len (void) {
+	char str[] = "deadbeef";
+
+	mu_assert_null (R_STR_NDUP (str, 0), "uppercase yields NULL");
+	mu_assert_streq (r_str_ndup (str, 0), "", "lowercase yields empty string");
+
+	mu_end;
+}
+
 bool all_tests(void) {
+	mu_run_test (test_r_file);
 	mu_run_test (test_r_str_wrap);
 	mu_run_test (test_r_str_newf);
 	mu_run_test (test_r_str_replace_char_once);
@@ -707,6 +728,7 @@ bool all_tests(void) {
 	mu_run_test (test_r_str_tok_r);
 	mu_run_test (test_r_mem_from_binstring);
 	mu_run_test (test_r_mem_to_binstring);
+	mu_run_test (test_r_str_ndup_zero_len);
 	return tests_passed != tests_run;
 }
 

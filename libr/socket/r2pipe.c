@@ -187,7 +187,7 @@ static int w32_createPipe(R2Pipe *r2pipe, const char *cmd) {
 
 #if HAVE_R2PIPE
 static R2Pipe* r2p_open_pipes(R2Pipe* r2p, const char *cmd) {
-	r_return_val_if_fail (r2p, NULL);
+	R_RETURN_VAL_IF_FAIL (r2p, NULL);
 #if R2__UNIX__ || defined(__CYGWIN__)
 	char *out = r_sys_getenv ("R2PIPE_IN");
 	char *in = r_sys_getenv ("R2PIPE_OUT");
@@ -245,7 +245,7 @@ R_API R2Pipe *r2pipe_open_dl(const char *libr_path) {
 		R2Pipe *r2pipe = r2pipe_new ();
 		if (r2pipe) {
 			r2pipe->coreb.core = rnew ();
-			r2pipe->coreb.cmdstr = rcmd;
+			r2pipe->coreb.cmdStr = rcmd;
 			// r2pipe->coreb.free = rfre;
 		}
 		return r2pipe;
@@ -344,7 +344,7 @@ R_API R2Pipe *r2pipe_open(const char *cmd) {
 
 R_API char *r2pipe_cmd(R2Pipe *r2p, const char *str) {
 #if HAVE_R2PIPE
-	r_return_val_if_fail (r2p && str, NULL);
+	R_RETURN_VAL_IF_FAIL (r2p && str, NULL);
 	if (!*str || !r2pipe_write (r2p, str)) {
 		r_sys_perror ("r2pipe_write");
 		return NULL;

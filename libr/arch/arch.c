@@ -1,4 +1,4 @@
-/* radare - LGPL - Copyright 2022-2023 - pancake, condret */
+/* radare - LGPL - Copyright 2022-2024 - pancake, condret */
 
 #include <r_arch.h>
 #include <config.h>
@@ -11,9 +11,6 @@ static void plugin_free(void *p) {
 
 R_API RArch *r_arch_new(void) {
 	RArch *a = R_NEW0 (RArch);
-	if (!a) {
-		return NULL;
-	}
 	a->plugins = r_list_newf ((RListFree)plugin_free);
 	if (!a->plugins) {
 		free (a);
@@ -103,7 +100,7 @@ static RArchPlugin *find_bestmatch(RArch *arch, RArchConfig *cfg, const char *na
 // use config as new arch config and use matching decoder as current
 // must return arch->current, and remove that field. and use refcounting
 R_API bool r_arch_use(RArch *arch, RArchConfig *config, const char *name) {
-	r_return_val_if_fail (arch, false);
+	R_RETURN_VAL_IF_FAIL (arch, false);
 	if (!config) {
 		config = arch->cfg;
 	}
@@ -171,7 +168,7 @@ R_API bool r_arch_use_encoder(RArch *arch, const char *dname) {
 // This api conflicts with r_arch_config_set_bits
 R_API bool r_arch_set_bits(RArch *arch, ut32 bits) {
 	// XXX unused??
-	r_return_val_if_fail (arch && bits, false);
+	R_RETURN_VAL_IF_FAIL (arch && bits, false);
 	if (!arch->cfg) {
 		RArchConfig *cfg = r_arch_config_new ();
 		if (!cfg) {
@@ -192,7 +189,7 @@ R_API bool r_arch_set_bits(RArch *arch, ut32 bits) {
 }
 
 R_API bool r_arch_set_endian(RArch *arch, ut32 endian) {
-	r_return_val_if_fail (arch, false);
+	R_RETURN_VAL_IF_FAIL (arch, false);
 	if (!arch->cfg) {
 		RArchConfig *cfg = r_arch_config_new ();
 		if (!cfg) {
@@ -212,7 +209,7 @@ R_API bool r_arch_set_endian(RArch *arch, ut32 endian) {
 
 R_API bool r_arch_set_arch(RArch *arch, char *archname) {
 	// Rename to _use_arch instead ?
-	r_return_val_if_fail (arch && archname, false);
+	R_RETURN_VAL_IF_FAIL (arch && archname, false);
 	char *_arch = strdup (archname);
 	if (!_arch) {
 		return false;
@@ -254,7 +251,7 @@ R_API RArchPlugin *r_arch_find(RArch *arch, const char *name) {
 }
 
 R_API bool r_arch_plugin_add(RArch *a, RArchPlugin *ap) {
-	r_return_val_if_fail (a && ap, false);
+	R_RETURN_VAL_IF_FAIL (a && ap, false);
 	if (!ap->meta.name || !ap->arch) {
 		return false;
 	}
@@ -262,12 +259,23 @@ R_API bool r_arch_plugin_add(RArch *a, RArchPlugin *ap) {
 }
 
 R_API bool r_arch_plugin_remove(RArch *arch, RArchPlugin *ap) {
-	// R2_590 TODO
+	R_RETURN_VAL_IF_FAIL (arch && ap, false);
+	RArchPlugin *p;
+	RListIter *iter;
+	r_list_foreach (arch->plugins, iter, p) {
+		if (p == ap) {
+			if (ap->fini) {
+				ap->fini (NULL); // sessions associated will be leaked
+			}
+			r_list_delete (arch->plugins, iter);
+			break;
+		}
+	}
 	return true;
 }
 
 R_API bool r_arch_del(RArch *arch, const char *name) {
-	r_return_val_if_fail (arch && arch->plugins && name, false);
+	R_RETURN_VAL_IF_FAIL (arch && arch->plugins && name, false);
 	RArchPlugin *ap = r_arch_find (arch, name);
 	find_bestmatch (arch, NULL, name, false);
 #if 0
@@ -323,7 +331,7 @@ R_API bool r_arch_decode(RArch *a, RAnalOp *op, RArchDecodeMask mask) {
 			if (align < 1) {
 				align = 1;
 			}
-			int minop = r_arch_info (a, R_ARCH_INFO_INV_OP_SIZE);
+			int minop = r_arch_info (a, R_ARCH_INFO_INVOP_SIZE);
 			// adjust mininstr and align
 			int remai = (op->addr + minop) % align;
 			if (align > 1 && remai) {

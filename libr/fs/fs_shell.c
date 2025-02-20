@@ -60,7 +60,7 @@ static bool r_fs_shell_command(RFSShell *shell, RFS *fs, const char *buf) {
 	RListIter *iter;
 	PrintfCallback cb_printf = fs->csb.cb_printf;
 	if (*buf == ':') {
-		char *msg = fs->cob.cmdstr (fs->cob.core, buf + 1);
+		char *msg = fs->cob.cmdStr (fs->cob.core, buf + 1);
 		printf ("%s", msg);
 		free (msg);
 	} else if (*buf == '!') {
@@ -270,7 +270,7 @@ static bool r_fs_shell_command(RFSShell *shell, RFS *fs, const char *buf) {
 #define PROMPT_PATH_BUFSIZE 1024
 
 R_API bool r_fs_shell(RFSShell* shell, RFS* fs, const char* root) {
-	r_return_val_if_fail (shell && fs, false);
+	R_RETURN_VAL_IF_FAIL (shell && fs, false);
 	if (R_STR_ISNOTEMPTY (root)) {
 		free (shell->cwd);
 		shell->cwd = strdup (root);

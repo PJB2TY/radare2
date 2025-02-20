@@ -28,7 +28,7 @@ plugins: ${LIBSO} ${LIBAR}
 include ${STATIC_ANAL_PLUGINS}
 
 STATIC_OBJS=$(addprefix $(LTOP)/anal/p/,$(STATIC_OBJ))
-OBJLIBS=meta.o reflines.o op.o fcn.o bb.o var.o block.o
+OBJLIBS=meta.o reflines.o op.o fcn.o bb.o var.o block.o c2/kv.o
 OBJLIBS+=value.o class.o type.o type_pdb.o dwarf_process.o
 OBJLIBS+=hint.o anal.o data.o xrefs.o sign.o btrace.o
 OBJLIBS+=switch.o cycles.o esil_dfg.o esil_cfg.o cond.o
@@ -42,6 +42,7 @@ OBJS+=d/cc-arm-16.o
 OBJS+=d/cc-arm-32.o
 OBJS+=d/cc-arm-64.o
 OBJS+=d/cc-avr-8.o
+OBJS+=d/cc-stm8-16.o
 OBJS+=d/cc-hexagon-32.o
 OBJS+=d/cc-m68k-32.o
 OBJS+=d/cc-mips-32.o
@@ -81,7 +82,7 @@ tests-esil:
 .PHONY: do doclean
 
 do:
-	$(MAKE) -C ../arch/p/arm/v35
+	#$(MAKE) -C ../arch/p/arm/v35
 	$(MAKE) -C d
 
 doclean:

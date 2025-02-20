@@ -92,6 +92,7 @@ struct super_blob_t {
 	struct blob_index_t index[];
 };
 
+// TODO generalize into RBinFileOptions
 struct MACH0_(opts_t) {
 	bool verbose;
 	ut64 header_at;
@@ -157,7 +158,7 @@ struct MACH0_(obj_t) {
 	bool libs_loaded;
 	RPVector libs_cache;
 	int nlibs;
-	int size;
+	ut64 size;
 	ut64 baddr;
 	ut64 entry;
 	bool big_endian;
@@ -165,7 +166,7 @@ struct MACH0_(obj_t) {
 	RBuffer *b;
 	int os;
 	Sdb *kv;
-	int has_crypto;
+	bool has_crypto;
 	int has_canary;
 	int has_retguard;
 	int has_sanitizers;
@@ -200,6 +201,8 @@ struct MACH0_(obj_t) {
 	bool nofuncstarts;
 	ut64 exports_trie_off;
 	ut32 exports_trie_size;
+	RInterval lastrange;
+	ut64 lastrange_pa;
 };
 
 typedef struct {
@@ -257,7 +260,7 @@ typedef bool (*RFixupCallback)(void * context, RFixupEventDetails * event_detail
 
 void MACH0_(opts_set_default)(struct MACH0_(opts_t) *options, RBinFile *bf);
 struct MACH0_(obj_t) *MACH0_(mach0_new)(const char *file, struct MACH0_(opts_t) *options);
-struct MACH0_(obj_t) *MACH0_(new_buf)(RBuffer *buf, struct MACH0_(opts_t) *options);
+struct MACH0_(obj_t) *MACH0_(new_buf)(RBinFile *bf, RBuffer *buf, struct MACH0_(opts_t) *options);
 void *MACH0_(mach0_free)(struct MACH0_(obj_t) *bin);
 const RVector *MACH0_(load_sections)(struct MACH0_(obj_t) *mo);
 RList *MACH0_(get_segments)(RBinFile *bf, struct MACH0_(obj_t) *mo);

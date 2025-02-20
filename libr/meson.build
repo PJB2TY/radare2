@@ -2,7 +2,7 @@ use_gpl = not get_option('nogpl')
 user_plugins = get_option('plugins').split(',')
 
 esil_plugins = [ 'null', 'dummy' ]
-asm_plugins = [ 'null' ]
+asm_plugins = [ 'null', 'att2intel' ]
 anal_plugins = [ 'null' ]
 arch_plugins = [ 'null' ]
 bin_plugins = [ 'any' ]
@@ -16,10 +16,15 @@ core_plugins = [ 'a2f', 'agD' ]
 egg_plugins = [ 'xor' ]
 debug_plugins = [ 'null', 'io', 'esil', 'rap' ]
 lang_plugins = [ 'lib', 'pipe', 'qjs', 'tsc', 'spp' ]
-parse_plugins = [ 'att2intel' ]
 
 if get_option('nogpl')
   user_plugins += ['nogrub']
+endif
+if get_option('use_libsqsh')
+  libsqsh_dep = dependency('libsqsh', version: '>=1.4.0', required: false)
+  if libsqsh_dep.found()
+  fs_plugins += ['squashfs']
+endif
 endif
 
 # This must be splitted in meson.builds for each module
@@ -41,6 +46,10 @@ if user_plugins.contains('apple') or user_plugins.contains('macos') or user_plug
     'xtr_sep64'
   ]
 endif
+if user_plugins.contains('python')
+  bin_plugins += [ 'python' ]
+  arch_plugins += [ 'pyc', 'pickle' ]
+endif
 if user_plugins.contains('bf')
   bin_plugins += [ 'bf' ]
   bp_plugins += [ 'bf' ]
@@ -59,7 +68,7 @@ endif
 if user_plugins.contains('x86')
   arch_plugins += [ 'x86_cs', 'x86_nz' ]
   bp_plugins += [ 'x86' ]
-  parse_plugins += [ 'x86_pseudo' ]
+  asm_plugins += [ 'x86' ]
 endif
 if user_plugins.contains('web')
   io_plugins += [ 'http' ]
@@ -70,21 +79,21 @@ if user_plugins.contains('arm')
   core_plugins += [ 'sixref' ]
   arch_plugins += [ 'arm', 'arm_cs'  ]
   bp_plugins += [ 'arm' ]
-  parse_plugins += [ 'arm_pseudo' ]
+  asm_plugins += [ 'arm' ]
 endif
 if user_plugins.contains('v850')
   arch_plugins += [ 'v810', 'v850' ]
-  parse_plugins += [ 'v850_pseudo' ]
+  asm_plugins += [ 'v850' ]
 endif
 if user_plugins.contains('wasm')
   bin_plugins += [ 'wasm' ]
   arch_plugins += [ 'wasm' ]
-  parse_plugins += [ 'wasm_pseudo' ]
+  asm_plugins += [ 'wasm' ]
 endif
 if user_plugins.contains('sparc')
   arch_plugins += [ 'sparc_cs' ]
   bp_plugins += [ 'sparc' ]
-  # missing parse_plugins += [ 'sparc_pseudo' ]
+  # missing parse_plugins += [ 'sparc' ]
 endif
 if user_plugins.contains('mips')
   arch_plugins += [ 'mips_cs' ]
@@ -92,12 +101,12 @@ if user_plugins.contains('mips')
     arch_plugins += [ 'mips_gnu' ]
   endif
   bp_plugins += [ 'mips' ]
-  parse_plugins += [ 'mips_pseudo' ]
+  asm_plugins += [ 'mips' ]
 endif
 if user_plugins.contains('dalvik')
   bin_plugins += [ 'dex' ]
   arch_plugins += [ 'dalvik' ]
-  parse_plugins += [ 'dalvik_pseudo' ]
+  asm_plugins += [ 'dalvik' ]
 endif
 if user_plugins.contains('loongarch')
   arch_plugins += [ 'loongarch_gnu' ]
@@ -156,6 +165,7 @@ if get_option('plugins') == ''
     'ppc_cs',
     'propeller',
     'pyc',
+    'pickle',
     'riscv',
     'riscv_cs',
     'rsp',
@@ -204,6 +214,7 @@ if get_option('plugins') == ''
 
   bin_plugins += [
     'art',
+    'pyc',
     'avr',
     'bflt',
     'bios',
@@ -294,6 +305,7 @@ if get_option('plugins') == ''
     'blowfish',
     'cps2',
     'des',
+    'ed25519',
     'rc2',
     'rc4',
     'rc6',
@@ -353,6 +365,7 @@ if get_option('plugins') == ''
     'sparse',
     'socket',
     'tcpslurp',
+    'uf2',
     'winkd',
     'winedbg',
     'zip'
@@ -391,24 +404,24 @@ if get_option('plugins') == ''
     ]
   endif
 
-  parse_plugins += [
-    '6502_pseudo',
-    'bpf_pseudo',
-    'evm_pseudo',
-    'arm_pseudo',
-    'avr_pseudo',
-    'chip8_pseudo',
-    'dalvik_pseudo',
-    'm68k_pseudo',
-    'mips_pseudo',
-    'ppc_pseudo',
-    'riscv_pseudo',
-    'sh_pseudo',
-    'tms320_pseudo',
-    'v850_pseudo',
-    'x86_pseudo',
-    'z80_pseudo',
-    'wasm_pseudo'
+  asm_plugins += [
+    '6502',
+    'bpf',
+    'evm',
+    'arm',
+    'avr',
+    'chip8',
+    'dalvik',
+    'm68k',
+    'mips',
+    'ppc',
+    'riscv',
+    'sh',
+    'tms320',
+    'v850',
+    'x86',
+    'z80',
+    'wasm'
   ]
 endif
 
@@ -446,7 +459,6 @@ include_files = [
   'include/r_list.h',
   'include/r_magic.h',
   'include/r_main.h',
-  'include/r_parse.h',
   'include/r_pdb.h',
   'include/r_qrcode.h',
   'include/r_reg.h',
@@ -473,13 +485,14 @@ r_util_files = [
   'include/r_util/r_asn1.h',
   'include/r_util/r_assert.h',
   'include/r_util/r_axml.h',
+  'include/r_util/r_base32.h',
   'include/r_util/r_base36.h',
   'include/r_util/r_base64.h',
   'include/r_util/r_base91.h',
   'include/r_util/r_big.h',
   'include/r_util/r_bitmap.h',
   'include/r_util/r_buf.h',
-  'include/r_util/r_ctypes.h',
+  'include/r_util/r_type.h',
   'include/r_util/r_debruijn.h',
   'include/r_util/r_diff.h',
   'include/r_util/r_event.h',
@@ -534,6 +547,7 @@ install_headers(r_util_files, install_dir: join_paths(r2_incdir, 'r_util'))
 r_crypto_files = [
   'include/r_crypto/r_aes.h',
   'include/r_crypto/r_des.h',
+  'include/r_crypto/r_ed25519.h',
   'include/r_crypto/r_sm4.h'
 ]
 install_headers(r_crypto_files, install_dir: join_paths(r2_incdir, 'r_crypto'))

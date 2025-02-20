@@ -1,9 +1,10 @@
 /* radare - LGPL - Copyright 2009-2023 - pancake */
 
 #include <r_reg.h>
+#include <r_util.h>
 
 R_API ut64 r_reg_get_value_big(RReg *reg, RRegItem *item, utX *val) {
-	r_return_val_if_fail (reg && item, 0);
+	R_RETURN_VAL_IF_FAIL (reg && item, 0);
 
 	ut64 ret = 0LL;
 	int off = BITS2BYTES (item->offset);
@@ -58,7 +59,7 @@ R_API ut64 r_reg_get_value_big(RReg *reg, RRegItem *item, utX *val) {
 }
 
 R_API ut64 r_reg_get_value(RReg *reg, RRegItem *item) {
-	r_return_val_if_fail (reg && item, 0);
+	R_RETURN_VAL_IF_FAIL (reg && item, 0);
 	if (item->offset == -2) {
 		return UT64_MAX;
 	}
@@ -70,7 +71,7 @@ R_API ut64 r_reg_get_value(RReg *reg, RRegItem *item) {
 	if (!regset->arena) {
 		return 0LL;
 	}
-	bool be = reg->config? R_ARCH_CONFIG_IS_BIG_ENDIAN (reg->config): R_SYS_ENDIAN;
+	bool be = (reg->endian & R_SYS_ENDIAN_BIG) == R_SYS_ENDIAN_BIG;
 	switch (item->size) {
 	case 1: {
 		int offset = item->offset / 8;
@@ -164,19 +165,22 @@ R_API ut64 r_reg_get_value(RReg *reg, RRegItem *item) {
 	return 0LL;
 }
 
-R_API ut64 r_reg_get_value_by_role(RReg *reg, RRegisterId role) {
+R_API ut64 r_reg_get_value_by_role(RReg *reg, RRegAlias alias) {
 	// TODO use mapping from RRegisterId to RRegItem (via RRegSet)
-	RRegItem *ri = r_reg_get (reg, r_reg_get_name (reg, role), -1);
+	const char *rn = r_reg_alias_getname (reg, alias);
 	ut64 res = UT64_MAX;
-	if (ri) {
-		res = r_reg_get_value (reg, ri);
-		r_unref (ri);
+	if (R_LIKELY (rn)) {
+		RRegItem *ri = r_reg_get (reg, rn, -1);
+		if (ri) {
+			res = r_reg_get_value (reg, ri);
+			r_unref (ri);
+		}
 	}
 	return res;
 }
 
 R_API bool r_reg_set_value(RReg *reg, RRegItem *item, ut64 value) {
-	r_return_val_if_fail (reg && item, false);
+	R_RETURN_VAL_IF_FAIL (reg && item, false);
 	ut8 bytes[32] = {0};
 	ut8 *src = bytes;
 	if (item->ro) {
@@ -189,7 +193,7 @@ R_API bool r_reg_set_value(RReg *reg, RRegItem *item, ut64 value) {
 	if (!arena) {
 		return false;
 	}
-	const bool be = reg->config? R_ARCH_CONFIG_IS_BIG_ENDIAN (reg->config): R_SYS_ENDIAN;
+	const bool be = (reg->endian & R_SYS_ENDIAN_BIG) == R_SYS_ENDIAN_BIG;
 	switch (item->size) {
 	case 80:
 	case 96: // long floating value
@@ -263,20 +267,23 @@ R_API bool r_reg_set_value(RReg *reg, RRegItem *item, ut64 value) {
 	return false;
 }
 
-R_API bool r_reg_set_value_by_role(RReg *reg, RRegisterId role, ut64 val) {
-	r_return_val_if_fail (reg, false);
-	// TODO use mapping from RRegisterId to RRegItem (via RRegSet)
-	RRegItem *r = r_reg_get (reg, r_reg_get_name (reg, role), -1);
+R_API bool r_reg_set_value_by_role(RReg *reg, RRegAlias alias, ut64 val) {
+	R_RETURN_VAL_IF_FAIL (reg, false);
+	const char *rn = r_reg_alias_getname (reg, alias);
 	bool res = false;
-	if (r) {
-		res = r_reg_set_value (reg, r, val);
-		r_unref (r);
+	if (R_LIKELY (rn)) {
+		// TODO use mapping from RRegAlias to RRegItem (via RRegSet)
+		RRegItem *r = r_reg_get (reg, rn, -1);
+		if (r) {
+			res = r_reg_set_value (reg, r, val);
+			r_unref (r);
+		}
 	}
 	return res;
 }
 
 R_API ut64 r_reg_set_bvalue(RReg *reg, RRegItem *item, const char *str) {
-	r_return_val_if_fail (reg && item && str, UT64_MAX);
+	R_RETURN_VAL_IF_FAIL (reg && item && str, UT64_MAX);
 	ut64 num = UT64_MAX;
 	if (item && item->flags && str) {
 		num = r_str_bits_from_string (str, item->flags);
@@ -289,7 +296,7 @@ R_API ut64 r_reg_set_bvalue(RReg *reg, RRegItem *item, const char *str) {
 }
 
 R_API R_HEAP char *r_reg_get_bvalue(RReg *reg, RRegItem *item) {
-	r_return_val_if_fail (reg && item, NULL);
+	R_RETURN_VAL_IF_FAIL (reg && item, NULL);
 	char *out = NULL;
 	if (item->flags) {
 		size_t if_len = strlen (item->flags);
@@ -307,7 +314,7 @@ R_API R_HEAP char *r_reg_get_bvalue(RReg *reg, RRegItem *item) {
 // result value is always casted into ut64
 // TODO: support packbits=128 for xmm registers
 R_API ut64 r_reg_get_pack(RReg *reg, RRegItem *item, int packidx, int packbits) {
-	r_return_val_if_fail (reg && item, 0LL);
+	R_RETURN_VAL_IF_FAIL (reg && item, 0LL);
 
 	if (packbits < 1) {
 		packbits = item->packed_size;
@@ -345,7 +352,7 @@ R_API ut64 r_reg_get_pack(RReg *reg, RRegItem *item, int packidx, int packbits) 
 
 // TODO: support packbits=128 for xmm registers
 R_API bool r_reg_set_pack(RReg *reg, RRegItem *item, int packidx, int packbits, ut64 val) {
-	r_return_val_if_fail (reg && reg->regset->arena && item, false);
+	R_RETURN_VAL_IF_FAIL (reg && reg->regset->arena && item, false);
 
 	if (packbits < 1) {
 		packbits = item->packed_size;

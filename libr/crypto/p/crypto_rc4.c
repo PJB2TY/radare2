@@ -103,10 +103,12 @@ static bool fini(RCryptoJob *cj) {
 }
 
 RCryptoPlugin r_crypto_plugin_rc4 = {
+	.type = R_CRYPTO_TYPE_ENCRYPT,
 	.meta = {
 		.name = "rc4",
-		.license = "LGPL",
+		.license = "LGPL-3.0-only",
 		.author = "pancake",
+		.desc = "Rivest Cipher 4",
 	},
 	.implements = "rc4",
 	.set_key = rc4_set_key,

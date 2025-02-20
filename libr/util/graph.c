@@ -1,4 +1,4 @@
-/* radare - LGPL - Copyright 2007-2023 - pancake, ret2libc, condret */
+/* radare - LGPL - Copyright 2007-2024 - pancake, ret2libc, condret */
 
 #include <r_util.h>
 
@@ -12,7 +12,8 @@ static RGraphNode *r_graph_node_new(void *data) {
 	RGraphNode *p = R_NEW0 (RGraphNode);
 	if (p) {
 		p->data = data;
-		p->free = NULL;
+// R_NEW0 already sets p->free to NULL
+//		p->free = NULL;
 		p->out_nodes = r_list_new ();
 		p->in_nodes = r_list_new ();
 		p->all_neighbours = r_list_new ();
@@ -146,22 +147,19 @@ R_API void r_graph_reset(RGraph *t) {
 		return;
 	}
 	t->nodes->free = (RListFree)r_graph_node_free;
-	t->n_nodes = 0;
+	t->n_nodes = 0; // XXX isnt r_list_length enough?
 	t->n_edges = 0;
 	t->last_index = 0;
 }
 
 R_API RGraphNode *r_graph_add_node(RGraph *t, void *data) {
-	if (!t) {
-		return NULL;
-	}
+	R_RETURN_VAL_IF_FAIL (t && data, NULL);
 	RGraphNode *n = r_graph_node_new (data);
-	if (!n) {
-		return NULL;
+	if (n) {
+		n->idx = t->last_index++;
+		r_list_append (t->nodes, n);
+		t->n_nodes++; /// istn r_list_length enough?
 	}
-	n->idx = t->last_index++;
-	r_list_append (t->nodes, n);
-	t->n_nodes++;
 	return n;
 }
 
@@ -298,7 +296,7 @@ R_API void r_graph_dfs_node_reverse(RGraph *g, RGraphNode *n, RGraphVisitor *vis
 }
 
 R_API void r_graph_dfs(RGraph *g, RGraphVisitor *vis) {
-	r_return_if_fail (g && vis);
+	R_RETURN_IF_FAIL (g && vis);
 	RGraphNode *n;
 	RListIter *it;
 
@@ -378,7 +376,7 @@ static void _dfs_ins_edge(const RGraphEdge *e, RGraphVisitor *vi) {
 }
 
 R_API RGraph *r_graph_dom_tree(RGraph *graph, RGraphNode *root) {
-	r_return_val_if_fail (graph && root, NULL);
+	R_RETURN_VAL_IF_FAIL (graph && root, NULL);
 	RGraph *g = r_graph_new ();
 	if (!g) {
 		return NULL;
@@ -428,12 +426,12 @@ R_API RGraph *r_graph_dom_tree(RGraph *graph, RGraphNode *root) {
 				min_n = in;
 			}
 		}
-		while (((RGraphDomNode *)max_n->data)->idx > dn->idx) {
+		while (max_n && ((RGraphDomNode *)max_n->data)->idx > dn->idx) {
 			max_n = (RGraphNode *)r_list_get_n (max_n->in_nodes, 0);
 		}
 // at this point max_n refers to the semi dominator (i hope this is correct)
 		RGraphNode *dom = min_n;
-		while (((RGraphDomNode *)max_n->data)->idx < ((RGraphDomNode *)dom->data)->idx) {
+		while (max_n && ((RGraphDomNode *)max_n->data)->idx < ((RGraphDomNode *)dom->data)->idx) {
 			dom = (RGraphNode *)r_list_get_n (dom->in_nodes, 0);
 		}
 // dom <= sdom
@@ -465,7 +463,7 @@ static void _invert_edges (RGraph *g) {
 }
 
 R_API RGraph *r_graph_pdom_tree(RGraph *graph, RGraphNode *root) {
-	r_return_val_if_fail (graph && root, NULL);
+	R_RETURN_VAL_IF_FAIL (graph && root, NULL);
 	_invert_edges (graph);
 	RGraph *g = r_graph_dom_tree (graph, root);
 	_invert_edges (graph);

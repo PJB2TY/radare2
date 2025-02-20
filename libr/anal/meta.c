@@ -1,4 +1,4 @@
-/* radare - LGPL - Copyright 2008-2023 - nibble, pancake, thestr4ng3r */
+/* radare - LGPL - Copyright 2008-2024 - nibble, pancake, thestr4ng3r */
 
 #include <r_anal.h>
 #include <r_core.h>
@@ -181,7 +181,7 @@ R_API bool r_meta_set(RAnal *a, RAnalMetaType type, ut64 addr, ut64 size, const 
 }
 
 R_API bool r_meta_set_with_subtype(RAnal *m, RAnalMetaType type, int subtype, ut64 addr, ut64 size, const char *str) {
-	r_return_val_if_fail (m && size, false);
+	R_RETURN_VAL_IF_FAIL (m && size, false);
 	ut64 end = addr + size - 1;
 	if (end < addr) {
 		end = UT64_MAX;
@@ -210,7 +210,7 @@ R_API RPVector *r_meta_get_all_in(RAnal *a, ut64 at, RAnalMetaType type) {
 }
 
 R_API RPVector *r_meta_get_all_intersect(RAnal *a, ut64 start, ut64 size, RAnalMetaType type) {
-	r_return_val_if_fail (size, NULL);
+	R_RETURN_VAL_IF_FAIL (size, NULL);
 	ut64 end = start + size - 1;
 	if (end < start) {
 		end = UT64_MAX;
@@ -236,8 +236,8 @@ R_API const char *r_meta_type_tostring(int type) {
 	return "# unknown meta # ";
 }
 
-R_API void r_meta_print(RAnal *a, RAnalMetaItem *d, ut64 start, ut64 size, int rad, PJ *pj, bool show_full) {
-	r_return_if_fail (!(rad == 'j' && !pj)); // rad == 'j' => pj
+R_API void r_meta_print(RAnal *a, RAnalMetaItem *d, ut64 start, ut64 size, int rad, PJ *pj, RTable *t, bool show_full) {
+	R_RETURN_IF_FAIL (!(rad == 'j' && !pj)); // rad == 'j' => pj
 	char *pstr, *base64_str;
 	RCore *core = a->coreb.core;
 	bool esc_bslash = core ? core->print->esc_bslash : false;
@@ -483,7 +483,7 @@ R_API void r_meta_print(RAnal *a, RAnalMetaItem *d, ut64 start, ut64 size, int r
 	}
 }
 
-R_API void r_meta_print_list_at(RAnal *a, ut64 addr, int rad, const char *tq) {
+R_API void r_meta_print_list_at(RAnal *a, ut64 addr, int rad, const char *tq, RTable *t) {
 	RPVector *nodes = collect_nodes_at (a, R_META_TYPE_ANY, r_spaces_current (&a->meta_spaces), addr);
 	if (!nodes) {
 		return;
@@ -491,16 +491,17 @@ R_API void r_meta_print_list_at(RAnal *a, ut64 addr, int rad, const char *tq) {
 	void **it;
 	r_pvector_foreach (nodes, it) {
 		RIntervalNode *node = *it;
-		r_meta_print (a, node->data, node->start, r_meta_node_size (node), rad, NULL, true);
+		r_meta_print (a, node->data, node->start, r_meta_node_size (node), rad, NULL, t, true);
 	}
 	r_pvector_free (nodes);
 }
 
-static void print_meta_list(RAnal *a, int type, int rad, ut64 addr, const char *tq) {
+static void print_meta_list(RAnal *a, int type, int rad, ut64 addr, const char *tq, RTable *t) {
 	PJ *pj = NULL;
-	RTable *t = NULL;
 	if (rad == ',') {
-		t = r_table_new ("meta");
+		if (!t) {
+			t = r_table_new ("meta");
+		}
 		RTableColumnType *s = r_table_type ("string");
 		RTableColumnType *n = r_table_type ("number");
 		r_table_add_column (t, n, "addr", 0);
@@ -541,7 +542,7 @@ static void print_meta_list(RAnal *a, int type, int rad, ut64 addr, const char *
 				r_meta_node_size (node),
 				type, name);
 		} else {
-			r_meta_print (a, item, node->start, r_meta_node_size (node), rad, pj, true);
+			r_meta_print (a, item, node->start, r_meta_node_size (node), rad, pj, t, true);
 		}
 	}
 
@@ -556,7 +557,7 @@ beach:
 	if (!tq || !strstr (tq, "?")) {
 		if (t) {
 			char *s = r_table_tostring (t);
-			r_cons_printf ("%s\n", s);
+			r_cons_print (s);
 			free (s);
 		} else if (pj) {
 			pj_end (pj);
@@ -566,12 +567,12 @@ beach:
 	pj_free (pj);
 }
 
-R_API void r_meta_print_list_all(RAnal *a, int type, int rad, const char *tq) {
-	print_meta_list (a, type, rad, UT64_MAX, tq);
+R_API void r_meta_print_list_all(RAnal *a, int type, int rad, const char *tq, RTable *t) {
+	print_meta_list (a, type, rad, UT64_MAX, tq, t);
 }
 
-R_API void r_meta_print_list_in_function(RAnal *a, int type, int rad, ut64 addr, const char *tq) {
-	print_meta_list (a, type, rad, addr, tq);
+R_API void r_meta_print_list_in_function(RAnal *a, int type, int rad, ut64 addr, const char *tq, RTable *t) {
+	print_meta_list (a, type, rad, addr, tq, t);
 }
 
 R_API void r_meta_rebase(RAnal *anal, ut64 diff) {
@@ -602,7 +603,7 @@ R_API void r_meta_space_unset_for(RAnal *a, const RSpace *space) {
 }
 
 R_API ut64 r_meta_get_size(RAnal *a, RAnalMetaType type) {
-	r_return_val_if_fail (a, 0);
+	R_RETURN_VAL_IF_FAIL (a, 0);
 	if (!a->meta.root) {
 		return 0;
 	}
@@ -635,6 +636,6 @@ R_API int r_meta_space_count_for(RAnal *a, const RSpace *space) {
 }
 
 R_API void r_meta_set_data_at(RAnal *a, ut64 addr, ut64 wordsz) {
-	r_return_if_fail (wordsz);
+	R_RETURN_IF_FAIL (wordsz);
 	r_meta_set (a, R_META_TYPE_DATA, addr, wordsz, NULL);
 }

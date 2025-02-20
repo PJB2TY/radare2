@@ -887,7 +887,7 @@ static int archinfo(RArchSession *as, ut32 q) {
 }
 
 static bool encode(RArchSession *s, RAnalOp *op, ut32 mask) {
-	r_return_val_if_fail (s && op, false);
+	R_RETURN_VAL_IF_FAIL (s && op, false);
 	const char *str = op->mnemonic;
 	if (!strcmp (str, "nop")) {
 		r_anal_op_set_bytes (op, op->addr, (const ut8* const)"\x00\x00", 2);
@@ -900,7 +900,8 @@ static bool encode(RArchSession *s, RAnalOp *op, ut32 mask) {
 const RArchPlugin r_arch_plugin_v850 = {
 	.meta = {
 		.name = "v850",
-		.desc = "V850 code analysis plugin",
+		.author = "pancake,brainstorm,condret",
+		.desc = "V850 Renesas Electronics microcontroller architecture",
 		.license = "MIT",
 	},
 	.preludes = preludes,

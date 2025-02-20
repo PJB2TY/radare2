@@ -24,7 +24,7 @@ static bool check(RBinFile *bf, RBuffer *b) {
 }
 
 static bool load(RBinFile *bf, RBuffer *buf, ut64 loadaddr) {
-	r_return_val_if_fail (bf && buf, false);
+	R_RETURN_VAL_IF_FAIL (bf && buf, false);
 	r_bin_ne_obj_t *res = r_bin_ne_new_buf (buf, bf->rbin->verbose);
 	if (res) {
 		bf->bo->bin_obj = res;
@@ -111,7 +111,7 @@ RBinPlugin r_bin_plugin_ne = {
 		.name = "ne",
 		.desc = "NE format r2 plugin",
 		.author = "GustavoLCR",
-		.license = "LGPL3",
+		.license = "LGPL-3.0-only",
 	},
 	.check = &check,
 	.load = &load,

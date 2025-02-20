@@ -742,7 +742,7 @@ static bool _6502_op(RArchSession *as, RAnalOp *op, RArchDecodeMask mask) {
 		}
 		op->fail = addr + op->size;
 		// FIXME: add a type of conditional
-		// op->cond = R_ANAL_COND_LE;
+		// op->cond = R_ANAL_CONDTYPE_LE;
 		_6502_anal_esil_ccall (op, data[0]);
 		break;
 	// JSR
@@ -983,8 +983,9 @@ static int archinfo(RArchSession *a, ut32 q) {
 const RArchPlugin r_arch_plugin_6502 = {
 	.meta = {
 		.name = "6502",
-		.desc = "6502/NES analysis plugin",
-		.license = "LGPL3",
+		.author = "condret,riq,pancake",
+		.desc = "Disassembler for the 6502 microprocessor family (NES, c64, ..)",
+		.license = "LGPL-3.0-only",
 	},
 	.arch = "6502",
 	.bits = R_SYS_BITS_PACK1 (8),

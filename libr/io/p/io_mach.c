@@ -1,4 +1,4 @@
-/* radare - LGPL - Copyright 2009-2022 - pancake */
+/* radare - LGPL - Copyright 2009-2024 - pancake */
 
 #include <r_userconf.h>
 
@@ -462,7 +462,8 @@ static ut64 __lseek(RIO *io, RIODesc *fd, ut64 offset, int whence) {
 		io->off += offset;
 		break;
 	case R_IO_SEEK_END:
-		io->off = ST64_MAX;
+		io->off = UT64_MAX;
+		break;
 	}
 	return io->off;
 }
@@ -488,7 +489,7 @@ static bool __close(RIODesc *fd) {
 }
 
 static char *__system(RIO *io, RIODesc *fd, const char *cmd) {
-	r_return_val_if_fail (io && fd, NULL);
+	R_RETURN_VAL_IF_FAIL (io && fd, NULL);
 	if (!cmd || !fd->data) {
 		return NULL;
 	}
@@ -561,8 +562,9 @@ static int __get_pid(RIODesc *desc) {
 RIOPlugin r_io_plugin_mach = {
 	.meta = {
 		.name = "mach",
+		.author = "pancake",
 		.desc = "Attach to mach debugger instance",
-		.license = "LGPL",
+		.license = "LGPL-3.0-only",
 	},
 	.uris = "attach://,mach://,smach://",
 	.open = __open,
@@ -581,8 +583,9 @@ RIOPlugin r_io_plugin_mach = {
 RIOPlugin r_io_plugin_mach = {
 	.meta = {
 		.name = "mach",
+		.author = "pancake",
 		.desc = "mach debug io (unsupported in this platform)",
-		.license = "LGPL"
+		.license = "LGPL-3.0-only"
 	},
 };
 #endif

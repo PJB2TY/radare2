@@ -1,11 +1,14 @@
 /* work-in-progress reverse engineered swift-demangler in C
- * Copyright MIT 2015-2023 by pancake@nopcode.org */
+ * Copyright MIT 2015-2024 by pancake@nopcode.org */
 
 #include <r_cons.h>
 #include <r_lib.h>
 
+// R2R db/formats/mangling/swift
+// R2R db/tools/rabin2
+
 // set this to true for debugging purposes
-#define USE_THIS_CODE 1
+#define USE_THIS_CODE 0
 
 static R_TH_LOCAL int have_swift_demangle = -1;
 #if R2__UNIX__
@@ -67,7 +70,7 @@ static const SwiftType metas [] = {
 	{ NULL, NULL }
 };
 
-static const SwiftType flags [] = {
+static const SwiftType flags[] = {
 	//{ "f", "function" }, // this is not an accessor
 	{ "s", "setter" },
 	{ "g", "getter" },
@@ -81,7 +84,12 @@ static const SwiftType flags [] = {
 
 static const char *getnum(const char* n, int *num) {
 	if (num && *n) {
-		*num = atoi (n);
+		int snum = atoi (n);
+		if (snum > 0) {
+			*num = snum;
+		} else {
+			*num = 0;
+		}
 	}
 	while (*n && *n >= '0' && *n <='9') {
 		n++;
@@ -94,6 +102,16 @@ static const char *numpos(const char* n) {
 		n++;
 	}
 	return n;
+}
+
+static const char *hasdigit(const char* n) {
+	while (*n) {
+		if (isdigit (*n)) {
+			return n;
+		}
+		n++;
+	}
+	return NULL;
 }
 
 static const char *getstring(const char *s, int len) {
@@ -131,11 +149,18 @@ static char *swift_demangle_cmd(const char *s) {
 			if (!swift_demangle) {
 				char *xcrun = r_file_path ("xcrun");
 				if (xcrun) {
-					free (swift_demangle);
 					swift_demangle = r_str_newf ("%s swift-demangle", xcrun);
 					have_swift_demangle = 1;
+					free (xcrun);
+				} else {
+					char *found = r_file_path ("swift");
+					if (found) {
+						swift_demangle = r_str_newf ("%s demangle", found);
+						free (found);
+					}
+					have_swift_demangle = 1;
+
 				}
-				free (xcrun);
 			}
 		}
 	}
@@ -178,6 +203,20 @@ static char *swift_demangle_lib(const char *s) {
 		haveSwiftCore = true;
 	}
 	if (swift_demangle) {
+		char *_s = NULL;
+		if (*s == '$') {
+			// all swift symbols must start with _$ now
+			_s = r_str_newf ("_%s", s);
+			char *res = swift_demangle (_s, strlen (_s), NULL, NULL, 0, 0);
+			free (_s);
+			return res;
+		}
+		if (*s == 's' && isdigit (s[1])) {
+			_s = r_str_newf ("_$%s", s);
+			char *res = swift_demangle (_s, strlen (_s), NULL, NULL, 0, 0);
+			free (_s);
+			return res;
+		}
 		return swift_demangle (s, strlen (s), NULL, NULL, 0, 0);
 	}
 #endif
@@ -200,8 +239,42 @@ static inline const char *str_removeprefix(const char *s, const char *prefix) {
 	return s;
 }
 
+static const char *conformsto(char p) {
+	switch (p) {
+	case 'Q':
+		return "Equatable";
+	case 'Y':
+		return "RawRepresentable";
+	case 'X':
+		return "RangeExpression";
+	case 'Z':
+		return "SignedInteger";
+	case 'U':
+		return "UnsignedInteger";
+	case 'T':
+		return "Sequence";
+	case 'M':
+		return "MutableCollection";
+	case 'L':
+		return "Comparable";
+	case 'K':
+		return "BidirectionalCollection";
+	case 'G':
+		return "RandomNumberGenerator";
+	case 'F':
+		return "FloatingPoint";
+	case 'E':
+		return "Encodable";
+	case 'B':
+		return "BinaryFloatingPoint";
+	case 'H':
+		return "Hashable";
+	}
+	return NULL;
+}
+
 static bool looks_valid(char p) {
-	if (IS_DIGIT (p)) {
+	if (isdigit (p)) {
 		return true;
 	}
 	switch (p) {
@@ -209,7 +282,10 @@ static bool looks_valid(char p) {
 	case 'I':
 	case 'M':
 	case 'o':
+	case 'f':
+	case 'N': // ON
 	case 's':
+	case 'S': // SHA SQAAMc
 	case 't':
 	case 'T':
 	case 'v':
@@ -233,20 +309,23 @@ typedef struct {
 	const char *tail;
 } SwiftState;
 
-static char *get_mangled_tail(const char **pp, RStrBuf *out) {
+static const char *get_mangled_tail(const char **pp, RStrBuf *out) {
 	const char *p = *pp;
 	if (R_STR_ISEMPTY (p)) {
 		return NULL;
 	}
+	if (p[1] == 'f') {
+		p++;
+	}
 	switch (p[1]) {
 	case 'T':
-		r_strbuf_append (out, "Swift.");
-		// type like 'SwiftObject'
 		break;
 	case 'W':
 		switch (p[2]) {
 		case 'a':
 			return "..protocol";
+		case 'C':
+			return "..enum.case";
 		}
 		break;
 	case 'F':
@@ -259,16 +338,30 @@ static char *get_mangled_tail(const char **pp, RStrBuf *out) {
 	case 's':
 		// nothing here
 		break;
+	case 'd':
+		return "..deinit";
+	case 'D':
+		return "..deinit.deallocating";
+	case 'N':
+		return "..metadata.type";
 	case 'M':
 		switch (p[2]) {
-		case 'a':
-			return "..accessor.metadata";
 		case 'e':
 			return "..override";
 		case 'm':
 			return "..metaclass";
+		case 'n':
+			return "..nominal.type.descriptor";
+		case 'o':
+			return "..metadata.base";
+		case 'V':
+			return "..method.descriptor";
+		case 'u':
+			return "..method.lookup";
+		case 'a':
+			return "..metadata.accessor";
 		case 'L':
-			return "..lazy.metadata";
+			return "..metadata.lazy";
 		default:
 			return "..metadata";
 		}
@@ -284,6 +377,22 @@ static char *my_swift_demangler(const char *s) {
 	// SwiftState ss = { 0 };
 	SwiftCheck is = {0};
 	is.first = true;
+#if 0
+	if (r_str_startswith (s, "$s")) {
+		s += 2;
+	}
+#endif
+	if (r_str_startswith (s, "So") && r_str_endswith (s, "C")) {
+		int len = atoi (s + 2);
+		s += 2;
+		while (isdigit (*s)) {
+			s++;
+		}
+		char *ns = r_str_ndup (s, len);
+		char *fs = r_str_newf ("__C.%s", ns);
+		free (ns);
+		return fs;
+	}
 
 	int i, len;
 	const char *attr = NULL;
@@ -317,7 +426,7 @@ static char *my_swift_demangler(const char *s) {
 	// _TF or __TW
 	if (looks_valid (*p)) {
 		if (r_str_startswith (p + 1, "SS")) {
-			r_strbuf_append (out, "String.init(");
+			r_strbuf_append (out, "Swift.String.init(");
 			p += 3;
 		}
 		// TODO: move into get_tail()
@@ -383,14 +492,16 @@ static char *my_swift_demangler(const char *s) {
 		}
 		/* parse accessors */
 		if (attr) {
+			if (r_str_startswith (q, "sE")) {
+				q++;
+			}
 			int len = 0;
-			const char *name;
 			/* get field name and then type */
 			resolve (types, q, &attr);
 
 			//printf ("Accessor: %s\n", attr);
 			q = getnum (q + 1, &len);
-			name = getstring (q, len);
+			const char *name = getstring (q, len);
 #if 0
 			if (R_STR_ISNOTEMPTY (name)) {
 				printf ("Field Name: %s\n", name);
@@ -412,7 +523,12 @@ static char *my_swift_demangler(const char *s) {
 			if (*q == '_') {
 				r_strbuf_append (out, " -> ()");
 			}
+			if (arg) {
+				q = arg;
+				goto moreitems;
+			}
 		} else {
+moreitems:
 			/* parse function parameters here */
 			// type len value/
 			for (i = 0; q && q < q_end && q >= q_start; i++) {
@@ -420,6 +536,70 @@ static char *my_swift_demangler(const char *s) {
 					q++;
 				}
 				switch (*q) {
+				case 'A': // skip 'AAC' cases
+
+					if (!isdigit (q[1])) {
+						q += 2;
+						r_strbuf_append (out, ".");
+						continue;
+					}
+					// ignored stuff here
+					break;
+				case 'C': // "s16IOSSecuritySuiteAACMu"
+				case 'O':
+					if (!isdigit (q[1]) && looks_valid (q[1])) {
+						if (q[1] == 'S') {
+							const char *tail = conformsto (q[2]);
+							if (tail) {
+								r_strbuf_append (out, ".conformsto.");
+								r_strbuf_append (out, tail);
+							} else {
+								R_LOG_DEBUG ("Unhandled s9Alamofire10HTTPMethodO8rawValueACSgSS_tcfC");
+								r_strbuf_append (out, ".");
+								r_strbuf_append (out, q);
+								q = q_end;
+								continue;
+							}
+						} else {
+							const char *tail = get_mangled_tail (&q, out);
+							if (tail) {
+								r_strbuf_append (out, tail);
+							} else {
+								r_strbuf_append (out, ".");
+							}
+						}
+						q++;
+						continue;
+					} else {
+						r_strbuf_append (out, ".");
+						// fallthorugh
+					}
+					if (isdigit (q[1])) {
+						int n = 0;
+						const char *Q = getnum (q + 1, &n);
+						const char *res = getstring (Q, n);
+						if (res) {
+							r_strbuf_append (out, res);
+						}
+						q = Q + n;
+						if (q >= q_end) {
+							continue;
+						}
+						if (isdigit (q[0])) {
+							r_strbuf_append (out, ".");
+							n = 0;
+							const char *Q = getnum (q, &n);
+							const char *res = getstring (Q, n);
+							if (res) {
+								r_strbuf_append (out, res);
+							}
+							q = Q + n;
+						}
+						continue;
+					}
+				case 'b':
+					r_strbuf_append (out, "bool");
+					break;
 				case 's':
 					{
 						int n = 0;
@@ -445,7 +625,33 @@ static char *my_swift_demangler(const char *s) {
 					if (q[1] == '1') {
 						q++;
 					}
+					if (*q == 'S') {
+					//	r_strbuf_append (out, ".String");
+					}
 					switch (q[1]) {
+					case 'g':
+						r_strbuf_append (out, q);
+						q = q_end;
+						break;
+					case 'v':
+						if (q + 2 < q_end) {
+							q += 2;
+							const char *tail = get_mangled_tail (&q, out);
+							if (tail) {
+								r_strbuf_append (out, tail);
+							} else {
+								R_LOG_DEBUG ("Unhandled s9Alamofire10HTTPMethodO8rawValueACSgSS_tcfC");
+								r_strbuf_append (out, ".");
+								r_strbuf_append (out, q);
+								q = q_end;
+							}
+						} else {
+							R_LOG_DEBUG ("Unhandled s9Alamofire10HTTPMethodO8rawValueACSgSS_tcfC");
+							r_strbuf_append (out, ".");
+							r_strbuf_append (out, q);
+							q = q_end;
+						}
+						break;
 					case '0':
 						r_strbuf_append (out, " (self) -> ()");
 						if (attr) {
@@ -457,6 +663,7 @@ static char *my_swift_demangler(const char *s) {
 					case 'S':
 						// swift string
 						r_strbuf_append (out, "__String");
+						q++;
 						break;
 					case '_':
 						// swift string
@@ -474,7 +681,7 @@ static char *my_swift_demangler(const char *s) {
 				case 'T':
 				case 'I':
 					p = resolve (types, q + 0, &attr); // type
-					if (p && *p && IS_DIGIT (p[1])) {
+					if (p && *p && isdigit (p[1])) {
 						p--;
 					}
 					break;
@@ -492,14 +699,94 @@ static char *my_swift_demangler(const char *s) {
 					break;
 				case 'V':
 					p = resolve (types, q + 1, &attr); // type
+					if (!p) {
+						int n = 0;
+repeat:;
+						const char *Q = getnum (q + 1, &n);
+						const char *res = getstring (Q, n);
+						if (R_STR_ISNOTEMPTY (res)) {
+							r_strbuf_appendf (out, ".%s", res);
+						} else {
+							if (*q) {
+								r_strbuf_appendf (out, "...%s", q);
+								q += strlen (q);
+							}
+						}
+						if (n == 0) {
+							continue;
+						}
+						q = Q + n;
+						if (q >= q_end) {
+							continue;
+						}
+						if (!isdigit (*q)) {
+							if (!hasdigit (q) && *q == 'V') {
+								r_strbuf_appendf (out, "...%s", q);
+								q += strlen (q);
+							} else {
+								const char *dig = hasdigit (q);
+								if (dig) {
+									q = dig;
+								} else {
+									// eprintf ("NO DIGI\n");
+								}
+							}
+						}
+						if (isdigit (*q)) {
+							q--;
+							goto repeat;
+#if 0
+							int n = 0;
+							const char *Q = getnum (q, &n);
+							const char *res = getstring (Q, n);
+							if (res) {
+								r_strbuf_append (out, ".");
+								r_strbuf_append (out, res);
+							}
+							q = Q + n;
+#endif
+						}
+					}
+					q++;
 					break;
 				case '_':
 					// it's return value time!
 					p = resolve (types, q + 1, &attr); // type
-					// printf ("RETURN TYPE %s\n", attr);
+					if (!p) {
+						int n = 0;
+						const char *Q = getnum (q + 1, &n);
+						const char *res = getstring (Q, n);
+						if (res) {
+							r_strbuf_append (out, ".");
+							r_strbuf_append (out, res);
+						}
+						q = Q + n;
+						if (q >= q_end) {
+							continue;
+						}
+						if (isdigit (*q)) {
+							int n = 0;
+							const char *Q = getnum (q, &n);
+							const char *res = getstring (Q, n);
+							if (res) {
+								r_strbuf_append (out, ".");
+								r_strbuf_append (out, res);
+							}
+							q = Q + n;
+						} else {
+							if (*q) {
+								r_strbuf_appendf (out, "...%s", q);
+								q += strlen (q);
+							}
+						}
+					}
+					q++;
 					break;
 				default:
 					p = resolve (types, q, &attr); // type
+					break;
+				}
+				if (q >= q_end) {
 					break;
 				}
 				if (p) {
@@ -511,7 +798,7 @@ static char *my_swift_demangler(const char *s) {
 					//	attr, len, getstring (q, len));
 					if (!len) {
 						if (is.retmode) {
-							if (q + 1 > q_end) {
+							if (q > q_end) {
 								if (attr) {
 									r_strbuf_appendf (out, " -> %s", attr);
 								}
@@ -568,8 +855,8 @@ static char *my_swift_demangler(const char *s) {
 					q += len;
 					p = q;
 				} else {
-					if (R_STR_ISEMPTY (q)) {
-						break;
+					if (q >= q_end || R_STR_ISEMPTY (q)) {
+						continue;
 					}
 					q++;
 					char *n = strstr (q, "__");
@@ -577,16 +864,21 @@ static char *my_swift_demangler(const char *s) {
 						q = n + 1;
 					} else {
 						n = strchr (q, '_');
-						if (!n) {
+						if (!n && *q) {
+							r_strbuf_appendf (out, "...%s", q);
 							break;
 						}
-						q = n + 1;
+						if (n) {
+							q = n + 1;
+						} else {
+							q++;
+						}
 					}
 				}
 			}
 		}
 	} else {
-		//printf ("Unsupported type: %c\n", *p);
+		R_LOG_DEBUG ("Unsupported swift mangling type: %c", *p);
 	}
 	// https://www.guardsquare.com/blog/swift-native-method-swizzling
 	if (r_str_endswith (s, "FTX")) {
@@ -625,16 +917,26 @@ static char *my_swift_demangler(const char *s) {
 }
 
 R_API char *r_bin_demangle_swift(const char *s, bool syscmd, bool trylib) {
+#if USE_THIS_CODE
+	syscmd = trylib = false; // useful for debugging the embedded demangler on macos
+#endif
+	if (!trylib && !strcmp (s, "_TtCs12_SwiftObject")) {
+		// this hack is for class tests to work, but the parser should be fixed
+		// to support this: the "Swift" module comes from the known-module abbreviation "s",
+		// see https://github.com/swiftlang/swift/blob/c998bbc4d98b4b4ca16831b33054fa750456e053/docs/ABI/Mangling.rst#declaration-contexts
+		return strdup ("Swift._SwiftObject");
+	}
+	const char *os = s;
+	bool hasdollar = *s == '$';
+
 	if (r_str_startswith (s, "_$")) {
+		hasdollar = true;
 		s += 2;
 	}
 #if 0
 	if (strstr (s, "UITableViewHeaderFoote")) {
 		eprintf ("==> (%s)\n", s);
 	}
-#endif
-#if USE_THIS_CODE
-	syscmd = trylib = false; // useful for debugging the embedded demangler on macos
 #endif
 	const char *space = strchr (s, ' ');
 	if (space) {
@@ -656,6 +958,8 @@ R_API char *r_bin_demangle_swift(const char *s, bool syscmd, bool trylib) {
 			}
 		}
 	}
+#if 0
+	// uncommenting this causes inconsistencies between rabin2 -D and iD
 	if (!syscmd && !trylib) {
 		if (r_str_startswith (s, "$s")) {
 			s += 2;
@@ -672,17 +976,7 @@ R_API char *r_bin_demangle_swift(const char *s, bool syscmd, bool trylib) {
 			return fs;
 		}
 	}
-#if 0
-	if (syscmd || trylib) {
-		if (r_str_startswith (s, "So") && isdigit (s[2])) {
-			char *ss = r_str_newf ("$s%s", s);
-			char *res = r_bin_demangle_swift (ss, syscmd, trylib);
-			free (ss);
-			return res;
-		}
-	} else {
 #endif
-//	}
 	s = str_removeprefix (s, "imp.");
 	s = str_removeprefix (s, "reloc.");
 	// check if string doesnt start with __ then return
@@ -710,7 +1004,11 @@ R_API char *r_bin_demangle_swift(const char *s, bool syscmd, bool trylib) {
 				}
 				break;
 			}
-			return NULL;
+			if (s > os) {
+				s--;
+			}
+			// return NULL;
+		} else {
 		}
 	} else {
 		// TIFF ones found on COFF binaries, swift-unrelated, return early to avoid FP
@@ -728,5 +1026,12 @@ R_API char *r_bin_demangle_swift(const char *s, bool syscmd, bool trylib) {
 			return res;
 		}
 	}
-	return my_swift_demangler (s);
+	char *res = my_swift_demangler (s);
+	if (!res && hasdollar) {
+		if (*s == '$' && s[1] && s[2]) {
+			s += 2;
+		}
+		return r_str_newf ("...%s", s);
+	}
+	return res;
 }

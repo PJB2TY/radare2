@@ -20,13 +20,25 @@ static char* get_file_in_cur_dir(const char *filepath) {
 }
 
 static void json_plugins(RCore *core, PJ *pj, const char *name, const char *cmd) {
-	char *lcj = r_core_cmd_str (core, cmd);
-	r_str_trim (lcj);
-	if (*lcj == '[') {
+	char *res = r_core_cmd_str (core, cmd);
+	r_str_trim (res);
+	if (*res == '[') {
 		pj_k (pj, name);
-		pj_raw (pj, lcj);
+		pj_raw (pj, res);
+	} else if (*res == '{') {
+		// XXX this happens only when listing the rbin plugins, so must be fixed there for consistency
+		char *arr = strchr (res, '[');
+		char *l = (char *)r_str_lchr (arr, ']');
+		if (l) {
+			l++;
+			*l = 0;
+		}
+		pj_k (pj, name);
+		pj_raw (pj, arr);
+	} else {
+		R_LOG_ERROR ("Invalid JSON for (%s) (%s)", cmd, res);
 	}
-	free (lcj);
+	free (res);
 }
 
 static int r_main_version_verify(RCore *core, bool show, bool json) {
@@ -54,7 +66,6 @@ static int r_main_version_verify(RCore *core, bool show, bool json) {
 #if !USE_LIB_MAGIC
 		{ "r_magic", r_magic_version },
 #endif
-		{ "r_parse", r_parse_version },
 		{ "r_reg", r_reg_version },
 		{ "r_sign", r_sign_version },
 		{ "r_search", r_search_version },
@@ -73,7 +84,7 @@ static int r_main_version_verify(RCore *core, bool show, bool json) {
 			pj_ks (pj, "birth", R2_BIRTH);
 			pj_ks (pj, "commit", R2_GITTIP);
 			pj_ki (pj, "commits", R2_VERSION_COMMIT);
-			pj_ks (pj, "license", "LGPLv3");
+			pj_ks (pj, "license", "LGPL-3.0-only");
 			pj_ks (pj, "tap", R2_GITTAP);
 			pj_ko (pj, "semver");
 			pj_ki (pj, "major", R2_VERSION_MAJOR);
@@ -104,34 +115,38 @@ static int r_main_version_verify(RCore *core, bool show, bool json) {
 			pj_ko (pj, "thirdparty");
 			{
 				pj_ko (pj, "capstone");
-				pj_ks (pj, "destdir", "shlr/capstone");
+				pj_ks (pj, "destdir", "subprojects/capstone-v*");
 				pj_ks (pj, "git", "https://github.com/capstone-engine/capstone");
 				pj_ks (pj, "branch", "v5");
+				pj_ks (pj, "license", "BSD-3-Clause");
 				pj_ks (pj, "commit", "097c04d9413c59a58b00d4d1c8d5dc0ac158ffaa");
 				pj_end (pj);
 			}
 			{
 				pj_ko (pj, "sdb");
-				pj_ks (pj, "destdir", "shlr/sdb");
+				pj_ks (pj, "destdir", "subprojects/sdb");
 				pj_ks (pj, "git", "https://github.com/radareorg/sdb");
 				pj_ks (pj, "branch", "master");
-				pj_ks (pj, "commit", "c4db2b24dacd25403ecb084c9b8e7840889ca236");
+				pj_ks (pj, "license", "MIT");
+				pj_ks (pj, "commit", "2e24eb0616dfce5e28130660313b56db9252dd5c"); // TODO SUBPROJECTS
 				pj_end (pj);
 			}
 			{
 				pj_ko (pj, "arm64v35");
 				pj_ks (pj, "destdir", "libr/arch/p/arm/v35/arch-arm64");
 				pj_ks (pj, "git", "https://github.com/radareorg/vector35-arch-arm64");
-				pj_ks (pj, "commit", "55d73c6bbb94448a5c615933179e73ac618cf876");
-				pj_ks (pj, "branch", "master");
+				pj_ks (pj, "license", "Apache-2.0");
+				pj_ks (pj, "commit", "cb7a22763c112e6ca99558edec2b6a9137234fdc");
+				pj_ks (pj, "branch", "radare2-2024");
 				pj_end (pj);
 			}
 			{
 				pj_ko (pj, "armv7v35");
 				pj_ks (pj, "destdir", "libr/arch/p/arm/v35/arch-armv7");
 				pj_ks (pj, "git", "https://github.com/radareorg/vector35-arch-armv7");
-				pj_ks (pj, "commit", "f270a6cc99644cb8e76055b6fa632b25abd26024");
-				pj_ks (pj, "branch", "master");
+				pj_ks (pj, "commit", "7d7a78f52196f6333bd5746dc526684edbfd9af0");
+				pj_ks (pj, "license", "Apache-2.0");
+				pj_ks (pj, "branch", "radare2-2024");
 				pj_end (pj);
 			}
 			pj_end (pj);
@@ -142,10 +157,15 @@ static int r_main_version_verify(RCore *core, bool show, bool json) {
 			json_plugins (core, pj, "core", "Lcj");
 			json_plugins (core, pj, "bin", "Lbj");
 			json_plugins (core, pj, "arch", "Laj");
+			json_plugins (core, pj, "crypto", "Lhj");
 			json_plugins (core, pj, "debug", "Ldj");
 			json_plugins (core, pj, "egg", "Lgj");
 			json_plugins (core, pj, "fs", "Lmj");
-			json_plugins (core, pj, "asm", "LAj");
+			json_plugins (core, pj, "io", "Loj");
+			json_plugins (core, pj, "lang", "Llj");
+			// json_plugins (core, pj, "parse", "Lpj");
+			// json_plugins (core, pj, "anal", "LAj");
+		//	json_plugins (core, pj, "asm", "LAj"); // should be psuedo but its not listed
 		}
 		pj_end (pj);
 		pj_end (pj);
@@ -185,6 +205,7 @@ static int main_help(int line) {
 		" =            read file from stdin (use -i and -c to run cmds)\n"
 		" -=           perform !=! command to run all commands remotely\n"
 		" -0           print \\x00 after init and every command\n"
+		" -1           redirect stderr to stdout\n"
 		" -2           close stderr file descriptor (silent warning messages)\n"
 		" -a [arch]    set asm.arch\n"
 		" -A           run 'aaa' command to analyze all referenced code\n"
@@ -246,6 +267,7 @@ static int main_help(int line) {
 		" R2_COLOR        sets the initial value for 'scr.color'. set to 0 for no color\n"
 		" R2_ARGS         ignore cli arguments and use these ones instead\n"
 		" R2_DEBUG        if defined, show error messages and crash signal.\n"
+		" R2_PAPI_SCRIPT  path to the custom r2papi csript\n"
 		" R2_DEBUG_NOPAPI do not load r2papi in the -j qjs shell\n"
 		" R2_DEBUG_ASSERT set a breakpoint when hitting an assert.\n"
 		" R2_IGNVER       load plugins ignoring the specified version. (be careful)\n"
@@ -599,7 +621,6 @@ typedef struct {
 	bool is_gdb;
 	RThread *th_bin;
 	RThread *th_ana;
-	// bool compute_hashes = true;
 	RList *cmds;
 	RList *evals;
 	RList *files;
@@ -614,6 +635,7 @@ typedef struct {
 	char *project_name;
 	char *qjs_script;
 	bool noStderr;
+	bool stderrToStdout;
 } RMainRadare2;
 
 static void mainr2_init(RMainRadare2 *mr) {
@@ -730,7 +752,7 @@ R_API int r_main_radare2(int argc, const char **argv) {
 	set_color_default (r);
 
 	RGetopt opt;
-	r_getopt_init (&opt, argc, argv, "=02AjMCwxfF:H:hm:e:nk:NdqQs:p:b:B:a:Lui:I:l:P:R:r:c:D:vVSzuXt");
+	r_getopt_init (&opt, argc, argv, "=012AjMCwxfF:H:hm:e:nk:NdqQs:p:b:B:a:Lui:I:l:P:R:r:c:D:vVSzuXt");
 	while ((c = r_getopt_next (&opt)) != -1) {
 		switch (c) {
 		case 'j':
@@ -739,6 +761,9 @@ R_API int r_main_radare2(int argc, const char **argv) {
 		case '=':
 			R_FREE (r->cmdremote);
 			r->cmdremote = strdup ("");
+			break;
+		case '1':
+			mr.stderrToStdout = true;
 			break;
 		case '2':
 			mr.noStderr = true;
@@ -861,7 +886,6 @@ R_API int r_main_radare2(int argc, const char **argv) {
 		case 'm':
 			r_config_set_i (r->config, "io.va", 1);
 			mr.mapaddr = r_num_math (r->num, opt.arg);
-			mr.s_seek = strdup (opt.arg);
 			break;
 		case 'M':
 			r_config_set_b (r->config, "bin.demangle", false);
@@ -1006,6 +1030,17 @@ R_API int r_main_radare2(int argc, const char **argv) {
 		}
 		return 0;
 	}
+	if (mr.stderrToStdout) {
+#if __wasi__
+		R_LOG_ERROR ("Redirect stderr to stdout is not supported for this platform");
+#else
+		if (dup2 (1, 2) == -1) {
+			R_LOG_ERROR ("Cannot redirect stderr to stdout");
+			mainr2_fini (&mr);
+			return 1;
+		}
+#endif
+	}
 	if (mr.noStderr) {
 		if (close (2) == -1) {
 			R_LOG_ERROR ("Failed to close stderr");
@@ -1036,7 +1071,7 @@ R_API int r_main_radare2(int argc, const char **argv) {
 	}
 	{
 		const char *dbg_profile = r_config_get (r->config, "dbg.profile");
-		if (dbg_profile && *dbg_profile) {
+		if (R_STR_ISNOTEMPTY (dbg_profile)) {
 			char *msg = r_file_slurp (dbg_profile, NULL);
 			if (msg) {
 				char *program = strstr (msg, "program=");
@@ -1083,12 +1118,12 @@ R_API int r_main_radare2(int argc, const char **argv) {
 		if (mr.quiet_leak) {
 			exit (0);
 		}
+		const char *arg = argv[opt.ind];
 		if (mr.json) {
-			r_io_plugin_list_json (r->io);
+			r_core_list_io (r, arg, 'j');
 		} else {
-			r_io_plugin_list (r->io);
+			r_core_list_io (r, arg, 0);
 		}
-		r_cons_newline ();
 		r_cons_flush ();
 		mainr2_fini (&mr);
 		return 0;
@@ -1211,10 +1246,10 @@ R_API int r_main_radare2(int argc, const char **argv) {
 		r_config_set_b (r->config, "scr.utf8", false);
 	}
 
-	char *histpath = r_file_home (".cache/radare2/history");
-	if (histpath) {
-		r_line_hist_load (histpath);
-		free (histpath);
+	char *history_file = r_xdg_cachedir ("history");
+	if (history_file) {
+		r_line_hist_load (history_file);
+		free (history_file);
 	}
 
 	if (r_config_get_b (r->config, "zign.autoload")) {
@@ -1426,7 +1461,13 @@ R_API int r_main_radare2(int argc, const char **argv) {
 					free (escaped_arg);
 					opt.ind++;
 				}
-				mr.pfile = strdup (mr.file);
+				if (mr.file) {
+					mr.pfile = strdup (mr.file);
+				} else {
+					R_LOG_ERROR ("Cannot find program to spawn");
+					ret = 1;
+					goto beach;
+				}
 			}
 		}
 		if (!mr.debug || mr.debug == 2) {
@@ -1501,9 +1542,6 @@ R_API int r_main_radare2(int argc, const char **argv) {
 							if (R_STR_ISNOTEMPTY (filepath)) {
 								if (mr.threaded) {
 									ThreadData *td = R_NEW0 (ThreadData);
-									if (!td) {
-										return -1;
-									}
 									td->filepath = strdup (filepath);
 									td->baddr = mr.baddr;
 									td->core = r;
@@ -1544,13 +1582,12 @@ R_API int r_main_radare2(int argc, const char **argv) {
 					}
 				}
 			}
-			if (mr.mapaddr) { // XXX use UT64_MAX?
-				if (r_config_get_b (r->config, "file.info")) {
-					R_LOG_WARN ("using oba to load the syminfo from different mapaddress");
-					// load symbols when using r2 -m 0x1000 /bin/ls
-					r_core_cmdf (r, "oba 0 0x%"PFMT64x, mr.mapaddr);
-					r_core_cmd0 (r, ".ies*");
-				}
+			// XXX use UT64_MAX?
+			if (mr.mapaddr && r_config_get_b (r->config, "file.info")) {
+				R_LOG_WARN ("using oba to load the syminfo from different mapaddress");
+				// load symbols when using r2 -m 0x1000 /bin/ls
+				r_core_cmdf (r, "oba 0 0x%"PFMT64x, mr.mapaddr);
+				r_core_cmd0 (r, ".ie*");
 			}
 		} else if (mr.pfile) {
 			RIODesc *f = r_core_file_open (r, mr.pfile, mr.perms, mr.mapaddr);
@@ -1606,9 +1643,12 @@ R_API int r_main_radare2(int argc, const char **argv) {
 			ret = 1;
 			goto beach;
 		}
-		if (r->bin->cur && r->bin->cur->bo && r->bin->cur->bo->info && r->bin->cur->bo->info->rclass && !strcmp ("fs", r->bin->cur->bo->info->rclass)) {
+		RBinInfo *bi = R_UNWRAP5 (r, bin, cur, bo, info);
+		if (bi && bi->rclass && !strcmp ("fs", bi->rclass)) {
 			const char *fstype = r->bin->cur->bo->info->bclass;
-			r_core_cmdf (r, "m /root %s @ 0", fstype);
+			if (!r_fs_mount (r->fs, fstype, "/root", 0)) {
+				R_LOG_ERROR ("Cannot mount /root");
+			}
 		}
 		r_core_cmd0 (r, "=!"); // initalize io subsystem
 		mr.iod = r->io ? r_io_desc_get (r->io, mr.fh->fd) : NULL;
@@ -1668,6 +1708,9 @@ R_API int r_main_radare2(int argc, const char **argv) {
 			r_bin_file_set_hashes (r->bin, r_bin_file_compute_hashes (r->bin, limit));
 		}
 #endif
+		if (!mr.s_seek && mr.mapaddr && mr.mapaddr != r->offset) {
+			mr.s_seek = r_str_newf ("0x%08"PFMT64x, mr.mapaddr);
+		}
 		if (mr.s_seek) {
 			mr.seek = r_num_math (r->num, mr.s_seek);
 			if (mr.seek != UT64_MAX) {
@@ -1695,14 +1738,25 @@ R_API int r_main_radare2(int argc, const char **argv) {
 			const char *path = uri_splitter? uri_splitter + 3: f;
 			if (r_file_exists (path)) {
 				// TODO: should 'q' unset the interactive bit?
-				bool isInteractive = r_cons_is_interactive ();
-				if (isInteractive && r_cons_yesno ('n', "Do you want to run the '%s' script? (y/N) ", path)) {
+				const bool isint = r_cons_is_interactive ();
+				if (isint && r_cons_yesno ('n', "Do you want to run the '%s' script? (y/N) ", path)) {
 					r_core_cmd_file (r, path);
 				}
 			}
 			free (f);
 		}
 	} else {
+		if (mr.asmarch) {
+			r_config_set (r->config, "asm.arch", mr.asmarch);
+		}
+		if (mr.asmbits) {
+			r_config_set (r->config, "asm.bits", mr.asmbits);
+		}
+		if (mr.asmos) {
+			r_config_set (r->config, "asm.os", mr.asmos);
+		}
+		// R2R test/esil/cmp
+		r_core_cmd0 (r, "aei"); // should be implicit
 		r_core_block_read (r);
 	}
 	{
@@ -1744,9 +1798,6 @@ R_API int r_main_radare2(int argc, const char **argv) {
 	if (mr.do_analysis > 0) {
 		if (mr.threaded) {
 			ThreadData *td = R_NEW0 (ThreadData);
-			if (!td) {
-				return -1;
-			}
 			td->th_bin = mr.th_bin;
 			td->do_analysis = mr.do_analysis;
 			td->core = r;
@@ -1769,7 +1820,7 @@ R_API int r_main_radare2(int argc, const char **argv) {
 		r_core_block_size (r, r_io_desc_size (mr.iod));
 	}
 	if (mr.perms & R_PERM_W) {
-		r_core_cmd0 (r, "omfg+w");
+		r_core_cmd0 (r, "ompg+w");
 	}
 	ret = run_commands (r, mr.cmds, mr.files, mr.quiet, mr.do_analysis);
 	r_list_free (mr.cmds);
@@ -1867,6 +1918,10 @@ R_API int r_main_radare2(int argc, const char **argv) {
 					}
 				}
 
+				const char *cmd_exit = r_config_get (r->config, "cmd.exit");
+				if (R_STR_ISNOTEMPTY (cmd_exit)) {
+					r_core_cmd0 (r, cmd_exit);
+				}
 				const char *prj = r_config_get (r->config, "prj.name");
 				if (R_STR_ISNOTEMPTY (prj)) {
 					if (r_core_project_is_dirty (r) && !r_config_get_b (r->config, "prj.alwaysprompt")) {

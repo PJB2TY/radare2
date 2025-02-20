@@ -13,10 +13,7 @@ R_VEC_TYPE (RVecAnalRef, RAnalRef);
 
 static inline const char *get_xrefname(RCore *core, ut64 addr) {
 	RAnalFunction *f = r_anal_get_fcn_in (core->anal, addr, 0);
-	if (f) {
-		return f->name;
-	}
-	return NULL;
+	return f? f->name: NULL;
 }
 
 static const char *get_refname(RCore *core, ut64 addr) {
@@ -80,12 +77,9 @@ R_API RList *r_sign_fcn_xrefs(RAnal *a, RAnalFunction *fcn) {
 }
 
 R_API RList *r_sign_fcn_refs(RAnal *a, RAnalFunction *fcn) {
-	RAnalRef *refi = NULL;
-
 	R_RETURN_VAL_IF_FAIL (a && fcn, NULL);
-
+	RAnalRef *refi = NULL;
 	RCore *core = a->coreb.core;
-
 	if (!core) {
 		return NULL;
 	}
@@ -176,7 +170,7 @@ static inline RList *sign_vars(RAnalFunction *fcn) {
 
 // TODO: use primitives from r_types
 #define ALPH(x) (x >= 'a' && x <= 'z') || (x >= 'A' && x <= 'Z')
-#define VALID_TOKEN_CHR(x) (ALPH (x) || IS_DIGIT (x) || x == '_' || x == '*' || x == ' ' || x == '.')
+#define VALID_TOKEN_CHR(x) (ALPH (x) || isdigit (x) || x == '_' || x == '*' || x == ' ' || x == '.')
 static bool types_sig_valid(const char *types) {
 	// quick state machine parser to validate types being sent to tcc_compile
 	int state = 0; // before, inside, or after ()
@@ -227,8 +221,8 @@ R_API bool r_sign_deserialize(RAnal *a, RSignItem *it, const char *k, const char
 	R_RETURN_VAL_IF_FAIL (a && it && k && v, false);
 
 	bool success = true;
-	char *k2 = r_str_new (k);
-	char *v2 = r_str_new (v);
+	char *k2 = strdup (k);
+	char *v2 = strdup (v);
 	if (!k2 || !v2) {
 		success = false;
 		goto out;
@@ -248,7 +242,7 @@ R_API bool r_sign_deserialize(RAnal *a, RSignItem *it, const char *k, const char
 	}
 
 	it->space = r_spaces_add (&a->zign_spaces, r_str_word_get0 (k2, 1));
-	it->name = r_str_new (r_str_word_get0 (k2, 2));
+	it->name = R_STR_DUP (r_str_word_get0 (k2, 2));
 
 	// remove newline at end
 	char *save_ptr = NULL;
@@ -343,7 +337,7 @@ R_API bool r_sign_deserialize(RAnal *a, RSignItem *it, const char *k, const char
 			if (token[0] != 0) {
 				it->hash = R_NEW0 (RSignHash);
 				if (it->hash) {
-					it->hash->bbhash = r_str_new (token);
+					it->hash->bbhash = strdup (token);
 				}
 			}
 			break;
@@ -613,6 +607,7 @@ static bool r_sign_set_item(Sdb *sdb, RSignItem *it, char *key_optional) {
 }
 
 R_API RSignItem *r_sign_get_item(RAnal *a, const char *name) {
+	R_RETURN_VAL_IF_FAIL (a && name, NULL);
 	char *k = space_serialize_key (r_spaces_current (&a->zign_spaces), name);
 	if (k) {
 		RSignItem *it = sign_get_sdb_item (a, k);
@@ -650,6 +645,7 @@ static bool validate_item(RSignItem *it) {
 }
 
 R_API bool r_sign_add_item(RAnal *a, RSignItem *it) {
+	R_RETURN_VAL_IF_FAIL (a && it, false);
 	r_name_filter (it->name, -1);
 	if (!validate_item (it)) {
 		return false;
@@ -786,7 +782,7 @@ static RSignBytes *r_sign_func_empty_mask(RAnal *a, RAnalFunction *fcn) {
 
 	// get size
 	RCore *core = a->coreb.core;
-	int maxsz = a->coreb.cfggeti (core, "zign.maxsz");
+	int maxsz = a->coreb.cfgGetI (core, "zign.maxsz");
 	r_list_sort (fcn->bbs, &bb_sort_by_addr);
 	ut64 ea = fcn->addr;
 	RAnalBlock *bb = (RAnalBlock *)fcn->bbs->tail->data;
@@ -929,7 +925,7 @@ static char *real_function_name(RAnal *a, RAnalFunction *fcn) {
 	ut64 addr = fcn->addr;
 	const char *name = fcn->name;
 	// resolve the manged name
-	char *res = a->coreb.cmdstrf (core, "is,vaddr/eq/0x%"PFMT64x",demangled/cols,a/head/1,:quiet", addr);
+	char *res = a->coreb.cmdStrF (core, "is,vaddr/eq/0x%"PFMT64x",demangled/cols,a/head/1,:quiet", addr);
 	if (res) {
 		r_str_trim (res);
 		if (*res) {
@@ -941,6 +937,7 @@ static char *real_function_name(RAnal *a, RAnalFunction *fcn) {
 }
 
 R_API int r_sign_all_functions(RAnal *a, bool merge) {
+	R_RETURN_VAL_IF_FAIL (a, 0);
 	RAnalFunction *fcn = NULL;
 	RListIter *iter = NULL;
 	int count = 0;
@@ -948,8 +945,10 @@ R_API int r_sign_all_functions(RAnal *a, bool merge) {
 	const RSpace *sp = r_spaces_current (&a->zign_spaces);
 	char *prev_name = NULL;
 	r_cons_break_push (NULL, NULL);
-	RCore *core = a->coreb.core;
-	bool do_mangled = a->coreb.cfggeti (core, "zign.mangled");
+	RCoreBind cb = a->coreb;
+	RCore *core = cb.core;
+	bool do_mangled = cb.cfgGetI (core, "zign.mangled");
+	bool zign_dups = a->opt.zigndups;
 	r_list_foreach_prev (a->fcns, iter, fcn) {
 		if (r_cons_is_breaked ()) {
 			break;
@@ -958,14 +957,14 @@ R_API int r_sign_all_functions(RAnal *a, bool merge) {
 		RSignItem *it = NULL;
 		if (merge || !name_exists (a->sdb_zigns, realname, sp)) {
 			it = item_from_func (a, fcn, realname);
-		} else {
+		} else if (zign_dups) {
 			char *name = get_unique_name (a->sdb_zigns, fcn->name, sp);
 			if (name) {
 				it = item_from_func (a, fcn, name);
 			}
 			free (name);
-			free (realname);
 		}
+		free (realname);
 		if (it) {
 			if (prev_name) {
 				it->next = prev_name;
@@ -1585,7 +1584,7 @@ static void list_sanitise_warn(char *s, const char *name, const char *field) {
 		}
 		if (sanitized) {
 			R_LOG_INFO ("%s->%s needs to be sanitized", name, field);
-			r_warn_if_reached ();
+			R_WARN_IF_REACHED ();
 		}
 	}
 }
@@ -1989,7 +1988,7 @@ R_API const char *r_sign_type_to_name(int type) {
 	case R_SIGN_BBHASH:
 		return "bbhash";
 	default:
-		r_warn_if_reached ();
+		R_WARN_IF_REACHED ();
 		return "UnknownType";
 	}
 }
@@ -3246,6 +3245,7 @@ R_API bool r_sign_load(RAnal *a, const char *file, bool merge) {
 }
 
 R_API bool r_sign_load_gz(RAnal *a, const char *filename, bool merge) {
+	R_RETURN_VAL_IF_FAIL (a && filename, false);
 	ut8 *buf = NULL;
 	int size = 0;
 	char *tmpfile = NULL;
@@ -3314,6 +3314,7 @@ R_API bool r_sign_save(RAnal *a, const char *file) {
 }
 
 R_API RSignOptions *r_sign_options_new(const char *bytes_thresh, const char *graph_thresh) {
+	R_RETURN_VAL_IF_FAIL (bytes_thresh && graph_thresh, NULL);
 	RSignOptions *options = R_NEW0 (RSignOptions);
 	if (!options) {
 		return NULL;

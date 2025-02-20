@@ -1435,7 +1435,7 @@ static void r_print_format_bitfield(RPrintFormat *pf, ut64 seeki, char *fmtname,
 static void r_print_format_enum(RPrintFormat *pf, ut64 seeki, char *fmtname, char *fieldname, ut64 addr, int size) {
 	const int mode = pf->mode;
 	const RPrint *p = pf->p;
-	r_return_if_fail (p && fmtname && fieldname);
+	R_RETURN_IF_FAIL (p && fmtname && fieldname);
 	if (size >= 8) {
 		// avoid shift overflow
 	} else {
@@ -2069,7 +2069,7 @@ R_API int r_print_format_internal(RPrint *p, RPrintFormat *pf, ut64 seek, const 
 	/* get times */
 	otimes = times = atoi (arg);
 	if (times > 0) {
-		while (IS_DIGIT (*arg)) {
+		while (isdigit (*arg)) {
 			arg++;
 		}
 	}

@@ -4,7 +4,7 @@
 #include <r_core.h> // just to get the RPrint instance
 
 R_API bool r_debug_reg_sync(RDebug *dbg, int type, int must_write) {
-	r_return_val_if_fail (dbg && dbg->reg, false);
+	R_RETURN_VAL_IF_FAIL (dbg && dbg->reg, false);
 	if (dbg->current == NULL) {
 		return true;
 	}
@@ -82,7 +82,7 @@ R_API bool r_debug_reg_sync(RDebug *dbg, int type, int must_write) {
 }
 
 static bool is_mandatory(RRegItem *item, const char *pcname, const char *spname) {
-	r_return_val_if_fail (item, true);
+	R_RETURN_VAL_IF_FAIL (item, true);
 	// if regname is PC or SP should return false, otherwise return true
 	if (pcname && !strcmp (item->name, pcname)) {
 		return false;
@@ -94,7 +94,7 @@ static bool is_mandatory(RRegItem *item, const char *pcname, const char *spname)
 }
 
 R_API bool r_debug_reg_list(RDebug *dbg, int type, int size, PJ *pj, int rad, const char *use_color) {
-	r_return_val_if_fail (dbg && dbg->reg, false);
+	R_RETURN_VAL_IF_FAIL (dbg && dbg->reg, false);
 	int delta, cols, n = 0;
 	const char *fmt, *fmt2, *kwhites;
 	RPrint *pr = NULL;
@@ -103,8 +103,8 @@ R_API bool r_debug_reg_list(RDebug *dbg, int type, int size, PJ *pj, int rad, co
 	RRegItem *item;
 	ut64 diff;
 	char strvalue[256];
-	bool isJson = (rad == 'j' || rad == 'J');
-	r_return_val_if_fail (!isJson || (isJson && pj), false);
+	bool isJson = tolower (rad) == 'j';
+	R_RETURN_VAL_IF_FAIL (!isJson || (isJson && pj), false);
 
 	if (dbg->coreb.core) {
 		pr = ((RCore*)dbg->coreb.core)->print;
@@ -119,7 +119,7 @@ R_API bool r_debug_reg_list(RDebug *dbg, int type, int size, PJ *pj, int rad, co
 			size = 16;
 		}
 	}
-	if (dbg->bits & R_SYS_BITS_64) {
+	if (size == 64) {
 		fmt = "%s = %s%s";
 		fmt2 = "%s%6s%s %s%s";
 		kwhites = "         ";
@@ -150,8 +150,8 @@ R_API bool r_debug_reg_list(RDebug *dbg, int type, int size, PJ *pj, int rad, co
 	if (rad == 1 || rad == '*') {
 		dbg->cb_printf ("fs+%s\n", R_FLAGS_FS_REGISTERS);
 	}
-	const char *pcname = r_reg_get_name_by_type (dbg->reg, "PC");
-	const char *spname = r_reg_get_name_by_type (dbg->reg, "SP");
+	const char *pcname = r_reg_alias_getname (dbg->reg, R_REG_ALIAS_PC);
+	const char *spname = r_reg_alias_getname (dbg->reg, R_REG_ALIAS_SP);
 	bool isfirst = true;
 	r_list_foreach (list, iter, item) {
 		ut64 value;
@@ -202,7 +202,7 @@ R_API bool r_debug_reg_list(RDebug *dbg, int type, int size, PJ *pj, int rad, co
 			if (isJson) {
 				pj_kn (pj, item->name, value);
 			} else {
-				if (pr && pr->wide_offsets && dbg->bits & R_SYS_BITS_64) {
+				if (pr && pr->wide_offsets && R_SYS_BITS_CHECK (dbg->bits, 64)) {
 					snprintf (strvalue, sizeof (strvalue), "0x%016"PFMT64x, value);
 				} else {
 					snprintf (strvalue, sizeof (strvalue),"0x%08"PFMT64x, value);
@@ -325,14 +325,16 @@ beach:
 }
 
 R_API bool r_debug_reg_set(RDebug *dbg, const char *name, ut64 num) {
-	r_return_val_if_fail (dbg && name, false);
-	int role = r_reg_get_name_idx (name);
+	R_RETURN_VAL_IF_FAIL (dbg && name, false);
 	if (!dbg->reg) {
 		return false;
 	}
+#if 0
+	int alias = r_reg_get_name_idx (name);
 	if (role != -1) {
 		name = r_reg_get_name (dbg->reg, role);
 	}
+#endif
 	RRegItem *ri = r_reg_get (dbg->reg, name, R_REG_TYPE_ALL);
 	if (ri) {
 		r_reg_set_value (dbg->reg, ri, num);
@@ -345,7 +347,6 @@ R_API bool r_debug_reg_set(RDebug *dbg, const char *name, ut64 num) {
 R_API ut64 r_debug_reg_get_err(RDebug *dbg, const char *name, int *err, utX *value) {
 	RRegItem *ri = NULL;
 	ut64 ret = 0LL;
-	int role = r_reg_get_name_idx (name);
 	if (err) {
 		*err = 0;
 	}
@@ -355,8 +356,10 @@ R_API ut64 r_debug_reg_get_err(RDebug *dbg, const char *name, int *err, utX *val
 		}
 		return UT64_MAX;
 	}
-	if (role != -1) {
-		name = r_reg_get_name (dbg->reg, role);
+#if 0
+	int alias = r_reg_alias_tostring (name);
+	if (alias != -1) {
+		name = r_reg_get_name (dbg->reg, alias);
 		if (R_STR_ISEMPTY (name)) {
 			if (err) {
 				*err = 1;
@@ -364,6 +367,7 @@ R_API ut64 r_debug_reg_get_err(RDebug *dbg, const char *name, int *err, utX *val
 			return UT64_MAX;
 		}
 	}
+#endif
 	ri = r_reg_get (dbg->reg, name, R_REG_TYPE_ALL);
 	if (ri) {
 		r_debug_reg_sync (dbg, R_REG_TYPE_ALL, false);

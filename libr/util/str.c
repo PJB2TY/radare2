@@ -136,18 +136,17 @@ R_API int r_str_bits(char *strout, const ut8 *buf, int len, const char *bitz) {
 	return j;
 }
 
-R_API const char *r_str_sysbits(const int v) {
+R_API const char *r_str_sysbits(const RSysBits v) {
 	switch (v) {
-	case R_SYS_BITS_4: return "4";
-	case R_SYS_BITS_8: return "8";
-	case R_SYS_BITS_4 | R_SYS_BITS_8: return "4,8";
-	case R_SYS_BITS_16: return "16";
-	case R_SYS_BITS_27: return "27";
-	case R_SYS_BITS_32: return "32";
-	case R_SYS_BITS_64: return "64";
-	case R_SYS_BITS_16 | R_SYS_BITS_32: return "16,32";
-	case R_SYS_BITS_16 | R_SYS_BITS_32 | R_SYS_BITS_64: return "16,32,64";
-	case R_SYS_BITS_32 | R_SYS_BITS_64: return "32,64";
+	case R_SYS_BITS_PACK (4): return "4";
+	case R_SYS_BITS_PACK (8): return "8";
+	case R_SYS_BITS_PACK (16): return "16";
+	case R_SYS_BITS_PACK (32): return "32";
+	case R_SYS_BITS_PACK (64): return "64";
+	case R_SYS_BITS_PACK2 (4, 8): return "4,8";
+	case R_SYS_BITS_PACK2 (16, 64): return "16,32";
+	case R_SYS_BITS_PACK2 (32, 64): return "32,64";
+	case R_SYS_BITS_PACK3 (16, 32, 64): return "16,32,64";
 	}
 	return "?";
 }
@@ -211,12 +210,12 @@ R_API int r_str_rwx(const char *str) {
 		ret |= strchr (str, 'm')? 16: 0;
 		ret |= strchr (str, 'r')? 4: 0;
 		ret |= strchr (str, 'w')? 2: 0;
-		ret |= strchr (str, 'x') ? 1 : 0;
-		if (*str && ret == 0 && strchr (str, '-')) {
+		ret |= strchr (str, 'x') ? 1: 0;
+		if (!ret && strcmp (str, "---")) {
 			ret = -1;
 		}
 	} else if (ret < 0 || ret >= R_ARRAY_SIZE (rwxstr)) {
-		ret = 0;
+		ret = -1;
 	}
 	return ret;
 }
@@ -248,7 +247,9 @@ R_API R_MUSTUSE char *r_str_r2_prefix(const char *str) {
 	return r_str_newf ("%s%s%s", r_sys_prefix (NULL), R_SYS_DIR, str);
 }
 
-// Compute a 64 bit DJB hash of a string.
+// Compute a modified 64 bit DJB hash of a string
+// The fisrt addition is replaced by a xor for speed
+// See the XOR version in http://www.cse.yorku.ca/~oz/hash.html
 R_API ut64 r_str_hash64(const char *s) {
 	ut64 len, h = 5381;
 	if (!s) {
@@ -260,14 +261,14 @@ R_API ut64 r_str_hash64(const char *s) {
 	return h;
 }
 
-// Compute a 32bit DJB hash of a string.
+// Compute a modified 32bit DJB hash of a string.
 R_API ut32 r_str_hash(const char *s) {
 	return (ut32) r_str_hash64 (s);
 }
 
 R_API int r_str_delta(char *p, char a, char b) {
-	char *_a = strchr (p, a);
-	char *_b = strchr (p, b);
+	const char *_a = strchr (p, a);
+	const char *_b = strchr (p, b);
 	return (!_a || !_b)? 0 : (_a - _b);
 }
 
@@ -318,10 +319,9 @@ R_API int r_str_word_set0(char *str) {
 				*p = '\0';
 				// FIX: i++;
 				continue;
-			} else {
-				quote = 1;
-				memmove (p, p + 1, strlen (p + 1) + 1);
 			}
+			quote = 1;
+			memmove (p, p + 1, strlen (p + 1) + 1);
 		}
 		if (quote) {
 			continue;
@@ -540,6 +540,29 @@ R_API const char *r_str_lchr(const char *str, char chr) {
 	return NULL;
 }
 
+R_API char *r_str_lstr(const char *s, const char *sub) {
+	if (!s || !sub) {
+		return NULL;  // Handle null input
+	}
+
+	const size_t sub_len = strlen (sub);
+	const size_t s_len = strlen (s);
+
+	if (sub_len == 0 || s_len < sub_len) {
+		return NULL;  // No valid substring can be found
+	}
+
+	const char *p = s + s_len - sub_len;
+
+	while (p >= s) {
+		if (strncmp (p, sub, sub_len) == 0) {
+			return (char *)p;
+		}
+		p--;
+	}
+	return NULL;
+}
+
 /* find the last char chr in the substring str[start:end] with end not included */
 R_API const char *r_sub_str_lchr(const char *str, int start, int end, char chr) {
 	do {
@@ -612,7 +635,7 @@ R_API const char *r_str_rstr(const char *base, const char *p) {
 }
 
 R_API const char *r_str_rchr(const char *base, const char *p, int ch) {
-	r_return_val_if_fail (base, NULL);
+	R_RETURN_VAL_IF_FAIL (base, NULL);
 	if (!p) {
 		return strrchr (base, ch);
 	}
@@ -672,7 +695,7 @@ R_API char *r_str_trunc_ellipsis(const char *str, int len) {
 	if (strlen (str) < len) {
 		return strdup (str);
 	}
-	char *buf = r_str_newlen (str, len);
+	char *buf = r_str_ndup (str, len);
 	if (buf && len > 4) {
 		strcpy (buf + len - 4, "...");
 	}
@@ -816,8 +839,8 @@ R_API char *r_str_prepend(char *ptr, const char *string) {
 }
 
 R_API char *r_str_appendlen(char *ptr, const char *string, int slen) {
-	r_return_val_if_fail (string, NULL);
-	char *msg = r_str_newlen (string, slen);
+	R_RETURN_VAL_IF_FAIL (string, NULL);
+	char *msg = R_STR_NDUP (string, slen); // only fails for token.c
 	char *ret = r_str_append (ptr, msg);
 	free (msg);
 	return ret;
@@ -882,7 +905,7 @@ R_API char *r_str_appendch(char *x, char y) {
 }
 
 R_API R_MUSTUSE char* r_str_replace_all(char *str, const char *key, const char *val) {
-	r_return_val_if_fail (str && key, NULL);
+	R_RETURN_VAL_IF_FAIL (str && key, NULL);
 	if (strstr (val, key)) {
 		// XXX value cant contain the key otherwise we go into infinite loop
 		R_LOG_ERROR ("RStr.replaceAll() value can't contain key");
@@ -904,7 +927,7 @@ R_API R_MUSTUSE char* r_str_replace(char *str, const char *key, const char *val,
 	if (g == 'i') {
 		return r_str_replace_icase (str, key, val, g, true);
 	}
-	r_return_val_if_fail (str && key && val, NULL);
+	R_RETURN_VAL_IF_FAIL (str && key && val, NULL);
 
 	int off, i, slen;
 	char *newstr, *p = str;
@@ -953,7 +976,7 @@ R_API R_MUSTUSE char* r_str_replace(char *str, const char *key, const char *val,
 }
 
 R_API R_MUSTUSE char *r_str_replace_icase(char *str, const char *key, const char *val, int g, int keep_case) {
-	r_return_val_if_fail (str && key && val, NULL);
+	R_RETURN_VAL_IF_FAIL (str && key && val, NULL);
 	char *newstr, *p = str;
 	size_t off, i;
 	size_t klen = strlen (key);
@@ -1072,12 +1095,9 @@ R_API R_MUSTUSE char* r_str_replace_thunked(char *str, char *clean, int *thunk, 
 }
 
 R_API void r_str_replace_in(char *str, ut32 sz, const char *key, const char *val, int g) {
-	r_return_if_fail (str && key && val);
+	R_RETURN_IF_FAIL (str && key && val);
 	char *heaped = r_str_replace (strdup (str), key, val, g);
 	if (heaped) {
-		if (sz < 0) {
-			sz = strlen (key);
-		}
 		r_str_ncpy (str, heaped, sz);
 		free (heaped);
 	}
@@ -1223,7 +1243,7 @@ R_API char *r_str_sanitize_sdb_key(const char *s) {
 }
 
 R_API void r_str_byte_escape(const char *p, char **dst, int dot_nl, bool default_dot, bool esc_bslash) {
-	r_return_if_fail (p && dst);
+	R_RETURN_IF_FAIL (p && dst);
 	char *q = *dst;
 	switch (*p) {
 	case '\n':
@@ -1285,7 +1305,7 @@ R_API void r_str_byte_escape(const char *p, char **dst, int dot_nl, bool default
 /* Internal function. dot_nl specifies whether to convert \n into the
  * graphiz-compatible newline \l */
 static char *r_str_escape_(const char *buf, int dot_nl, bool parse_esc_seq, bool ign_esc_seq, bool show_asciidot, bool esc_bslash) {
-	r_return_val_if_fail (buf, NULL);
+	R_RETURN_VAL_IF_FAIL (buf, NULL);
 
 	/* Worst case scenario, we convert every byte to a single-char escape
 	 * (e.g. \n) if show_asciidot, or \xhh if !show_asciidot */
@@ -1332,7 +1352,7 @@ out:
 
 /* hex-escape unprintable characters in a raw buffer (null-safe) */
 R_API char *r_str_escape_raw(const ut8 *buf, int sz) {
-	r_return_val_if_fail (buf, NULL);
+	R_RETURN_VAL_IF_FAIL (buf, NULL);
 
 	/* Worst case scenario, we convert every byte to a \xhh escape */
 	char *new_buf = malloc (1 + sz * 4);
@@ -1353,7 +1373,7 @@ R_API char *r_str_escape(const char *buf) {
 }
 
 R_API char *r_str_sanitize_r2(const char *buf) {
-	r_return_val_if_fail (buf, NULL);
+	R_RETURN_VAL_IF_FAIL (buf, NULL);
 	char *new_buf = malloc (1 + strlen (buf) * 2);
 	if (!new_buf) {
 		return NULL;
@@ -1380,14 +1400,14 @@ R_API char *r_str_sanitize_r2(const char *buf) {
 }
 
 R_API char *r_str_escape_sql(const char *buf) {
-	r_return_val_if_fail (buf, NULL);
+	R_RETURN_VAL_IF_FAIL (buf, NULL);
 	char *res = r_str_replace (strdup (buf), "'", "\\'", true);
 	return res;
 }
 
 // Return MUST BE surrounded by double-quotes
 R_API char *r_str_escape_sh(const char *buf) {
-	r_return_val_if_fail (buf, NULL);
+	R_RETURN_VAL_IF_FAIL (buf, NULL);
 	char *new_buf = malloc (1 + strlen (buf) * 2);
 	if (!new_buf) {
 		return NULL;
@@ -1540,7 +1560,7 @@ R_API char *r_str_escape_utf32be(const char *buf, int buf_size, bool show_asciid
 }
 
 R_API char *r_str_encoded_json(const char *buf, int buf_size, int encoding) {
-	r_return_val_if_fail (buf, NULL);
+	R_RETURN_VAL_IF_FAIL (buf, NULL);
 	size_t buf_sz = buf_size < 0 ? strlen (buf) : buf_size;
 	char *encoded_str;
 
@@ -1955,12 +1975,12 @@ R_API char *r_str_insert(R_OWN char *src, int pos, const char *str) {
 #endif
 
 R_API size_t r_str_ansi_len(const char *str) {
-	r_return_val_if_fail (str, 0);
+	R_RETURN_VAL_IF_FAIL (str, 0);
 	return r_str_ansi_nlen (str, 0);
 }
 
 R_API size_t r_str_nlen(const char *str, int n) {
-	r_return_val_if_fail (str && n >= 0, 0);
+	R_RETURN_VAL_IF_FAIL (str && n >= 0, 0);
 	size_t len = 0;
 	while (n > 0 && *str) {
 		len++;
@@ -2313,7 +2333,7 @@ R_API bool r_str_char_fullwidth(const char* s, size_t left) {
  * str - Pointer to buffer
  */
 R_API size_t r_str_utf8_charsize(const char *str) {
-	r_return_val_if_fail (str, 0);
+	R_RETURN_VAL_IF_FAIL (str, 0);
 	size_t size = 0;
 	size_t length = strlen (str);
 	while (size < length && size < 5) {
@@ -2332,7 +2352,7 @@ R_API size_t r_str_utf8_charsize(const char *str) {
  * prev_len - Length in bytes of the buffer until str
  */
 R_API size_t r_str_utf8_charsize_prev(const char *str, int prev_len) {
-	r_return_val_if_fail (str, 0);
+	R_RETURN_VAL_IF_FAIL (str, 0);
 	int pos = 0;
 	size_t size = 0, minsize = R_MIN (5, prev_len);
 	while (size < minsize) {
@@ -2350,7 +2370,7 @@ R_API size_t r_str_utf8_charsize_prev(const char *str, int prev_len) {
  * str - Pointer to buffer
  */
 R_API size_t r_str_utf8_charsize_last(const char *str) {
-	r_return_val_if_fail (str, 0);
+	R_RETURN_VAL_IF_FAIL (str, 0);
 	size_t len = strlen (str);
 	return r_str_utf8_charsize_prev (str + len, len);
 }
@@ -2417,7 +2437,7 @@ R_API bool r_str_glob(const char* str, const char *glob) {
 				needle_end++;
 			}
 			// Find the pattern in between wildcards
-			char* needle = r_str_ndup(glob, needle_end - glob);
+			char* needle = r_str_ndup (glob, needle_end - glob);
 			const char *advance_to = strstr (str, needle);
 			free (needle);
 			if (!advance_to) {
@@ -2875,7 +2895,7 @@ R_API void r_str_range_foreach(const char *r, RStrRangeCallback cb, void *u) {
 					cb (u, from);
 				}
 			} else {
-				fprintf (stderr, "Invalid range\n");
+				R_LOG_ERROR ("Invalid range");
 			}
 			for (r++; *r && *r != ',' && *r != '-'; r++) {
 				;
@@ -2916,7 +2936,7 @@ R_API bool r_str_range_in(const char *r, ut64 addr) {
 					return true;
 				}
 			} else {
-				fprintf (stderr, "Invalid range\n");
+				R_LOG_ERROR ("Invalid range");
 			}
 			for (r++; *r && *r != ',' && *r != '-'; r++) {
 				;
@@ -3393,7 +3413,7 @@ R_API char *r_str_between(const char *cmt, const char *prefix, const char *suffi
 }
 
 R_API bool r_str_endswith(const char *str, const char *needle) {
-	r_return_val_if_fail (str && needle, false);
+	R_RETURN_VAL_IF_FAIL (str && needle, false);
 	if (!*needle) {
 		return true;
 	}
@@ -3411,7 +3431,7 @@ R_API char *r_str_slice(const char *str, RStringSlice s) {
 }
 
 R_API RVecStringSlice *r_str_split_vec(const char *str, const char *c, int n) {
-	r_return_val_if_fail (str && c, NULL);
+	R_RETURN_VAL_IF_FAIL (str && c, NULL);
 	size_t b = 0;
 	// TODO honor 'c' and 'n'. not just split by ' '
 	RVecStringSlice *vs = RVecStringSlice_new ();
@@ -3437,16 +3457,22 @@ R_API RVecStringSlice *r_str_split_vec(const char *str, const char *c, int n) {
 }
 
 // Splits the string <str> by string <c> and returns the result in a list.
-// XXX should take const char * as argument!!
+// R2_600 - char *arg must be const!!
 R_API RList *r_str_split_list(char *str, const char *c, int n)  {
-	r_return_val_if_fail (str && c, NULL);
+	R_RETURN_VAL_IF_FAIL (str && c, NULL);
 	RList *lst = r_list_newf (NULL);
-	char *aux = str; // XXX should be an strdup
+	char *aux = str; // R2_600 - XXX should be an strdup
 	int i = 0;
 	char *e = aux;
 	const size_t clen = strlen (c);
 	for (;e;) {
 		e = strstr (aux, c);
+#if 0
+		if (e == aux) {
+			aux++;
+			continue;
+		}
+#endif
 		if (n > 0) {
 			if (++i > n) {
 				r_list_append (lst, aux);
@@ -3466,7 +3492,7 @@ R_API RList *r_str_split_list(char *str, const char *c, int n)  {
 }
 
 R_API RList *r_str_split_duplist(const char *_str, const char *c, bool trim) {
-	r_return_val_if_fail (_str && c, NULL);
+	R_RETURN_VAL_IF_FAIL (_str && c, NULL);
 	RList *lst = r_list_newf (free);
 	char *str = strdup (_str);
 	char *aux = str;
@@ -3520,16 +3546,15 @@ R_API size_t *r_str_split_lines(char *str, size_t *count) {
 }
 
 R_API bool r_str_isnumber(const char *str) {
-	if (!str || (!IS_DIGIT (*str) && *str != '-')) {
+	if (!str || (!isdigit (*str) && *str != '-')) {
 		return false;
 	}
 	for (str++; *str; str++) {
 		// consider '.' part of the number?
-		if (!IS_DIGIT (*str)) {
+		if (!isdigit (*str)) {
 			return false;
 		}
 	}
-
 	return true;
 }
 
@@ -3720,7 +3745,7 @@ err_r_str_mb_to_wc:
 }
 
 R_API char* r_str_wc_to_mb_l(const wchar_t *buf, int len) {
-	r_return_val_if_fail (buf, NULL);
+	R_RETURN_VAL_IF_FAIL (buf, NULL);
 	char *res_buf = NULL;
 	bool fail = true;
 
@@ -3837,7 +3862,7 @@ R_API void r_str_stripLine(char *str, const char *key) {
 }
 
 R_API char *r_str_list_join(RList *str, const char *sep) {
-	r_return_val_if_fail (str && sep, NULL);
+	R_RETURN_VAL_IF_FAIL (str && sep, NULL);
 	RListIter *iter;
 	RStrBuf *sb = r_strbuf_new ("");
 	r_list_foreach_iter (str, iter) {
@@ -3969,8 +3994,8 @@ R_API int r_str_distance(const char *a, const char *b) {
 }
 
 R_API const char *r_str_str_xy(const char *s, const char *word, const char *prev, int *x, int *y) {
-	r_return_val_if_fail (s && word && x && y, NULL);
-	r_return_val_if_fail (word[0] != '\0' && word[0] != '\n', NULL);
+	R_RETURN_VAL_IF_FAIL (s && word && x && y, NULL);
+	R_RETURN_VAL_IF_FAIL (word[0] != '\0' && word[0] != '\n', NULL);
 	const char *src = prev ? prev + 1 : s;
 	const char *d = strstr (src, word);
 	if (!d) {
@@ -4087,31 +4112,32 @@ R_API int r_str_size(const char *s, int *rows) {
 
 #undef r_str_startswith
 R_API bool r_str_startswith(const char *str, const char *needle) {
-	r_return_val_if_fail (str && needle, false);
+	R_RETURN_VAL_IF_FAIL (str && needle, false);
 	if (str == needle) {
 		return true;
 	}
 	return !strncmp (str, needle, strlen (needle));
 }
 
-R_API void r_str_fixspaces(char *str) {
-	// add space after commas
-	char *os = strdup (str);
-	int i, j;
-	for (i = j = 0; os[i]; i++,j++) {
-		char ch = os[i];
-		str[j] = ch;
+// add space after commas
+R_API char *r_str_fixspaces(char *str) {
+	R_RETURN_VAL_IF_FAIL (str, NULL);
+	RStrBuf *sb = r_strbuf_new ("");
+	int i;
+	for (i = 0; str[i]; i++) {
+		const char ch = str[i];
+		r_strbuf_append_n (sb, &ch, 1);
 		if (ch == ',') {
-			j++;
-			str[j] = ' ';
-			while (os[i + 1] == ' ') {
+			r_strbuf_append (sb, " ");
+			while (str[i + 1] == ' ') {
 				i++;
 			}
 		}
 	}
-	str[j] = 0;
-	free (os);
-	r_str_trim_tail (str);
+	char *newstr = r_strbuf_drain (sb);
+	r_str_trim_tail (newstr);
+	free (str);
+	return newstr;
 }
 
 R_API char *r_str_tok_r(char *str, const char *delim, char **save_ptr) {
@@ -4148,4 +4174,181 @@ R_API R_MUSTUSE char *r_str_after(char *s, char c) {
 		}
 	}
 	return NULL;
+}
+
+static void fill_line(RStrBuf *sb, int maxcol) {
+	int i;
+	if (maxcol < 1) {
+		return;
+	}
+	for (i = 0; i < maxcol; i++) {
+		r_strbuf_append (sb, " ");
+	}
+	r_strbuf_append (sb, Color_RESET_BG);
+	r_strbuf_append (sb, Color_RESET);
+	r_strbuf_append (sb, "\n");
+}
+
+R_API char *r_str_md2txt(const char *page, bool usecolor) {
+	char *b = r_file_slurp (page, NULL);
+	RStrBuf *sb = r_strbuf_new ("");
+	int col = 0;
+	const int maxcol = 75;
+	bool codeblock = false;
+	bool title = false;
+	bool codeblockline = false;
+	while (*b) {
+		int ch = *b;
+repeat:
+		switch (ch) {
+		case 10: // '\n'
+			if (codeblock || title) {
+				const int j = title? maxcol + 2: maxcol - 4;
+				if (usecolor) {
+					fill_line (sb, j - col);
+					if (title) {
+						r_strbuf_append (sb, Color_BLACK);
+						r_strbuf_append (sb, Color_BGBLUE);
+						fill_line (sb, maxcol + 4);
+					}
+				}
+				title = false;
+			}
+			col = 0;
+			if (usecolor) {
+				r_strbuf_append (sb, Color_RESET);
+			}
+			if (!codeblock) {
+				r_strbuf_append (sb, "\n");
+			}
+			if (codeblockline) {
+				codeblock = false;
+				codeblockline = false;
+			}
+			break;
+		case '\t':
+			if (col == 0) {
+				codeblock = true;
+				codeblockline = true;
+			} else {
+				r_strbuf_append (sb, "  ");
+			}
+			break;
+		case 13:
+			// ignore
+			break;
+		default:
+			if (col > maxcol) {
+				ch = 10;
+				if (*b == ' ') {
+					b++;
+				} else {
+					if (codeblock) {
+						col = 1;
+						// nothing
+					} else {
+						r_strbuf_append (sb, "-");
+					}
+				}
+				b--;
+				goto repeat;
+			}
+			if (col == 0) {
+				if (r_str_startswith (b, "```")) {
+					while (*b && *b != '\n') {
+						b++;
+					}
+					codeblock = !codeblock;
+					if (!codeblock) {
+						r_strbuf_append (sb, Color_RESET_BG);
+					}
+					continue;
+				}
+				if (!codeblock && r_str_startswith (b, "###")) {
+					if (usecolor) {
+						r_strbuf_append (sb, Color_BLACK);
+						r_strbuf_append (sb, Color_BGBLUE);
+						fill_line (sb, maxcol + 4);
+						r_strbuf_append (sb, Color_BLUE);
+						r_strbuf_append (sb, Color_BGCYAN);
+					}
+					r_strbuf_append (sb, "  ");
+					b += 3;
+					title = true;
+				} else if (!codeblock && r_str_startswith (b, "##")) {
+					if (usecolor) {
+						r_strbuf_append (sb, Color_BLACK);
+						r_strbuf_append (sb, Color_BGBLUE);
+						fill_line (sb, maxcol + 4);
+						r_strbuf_append (sb, Color_BLACK);
+						r_strbuf_append (sb, Color_BGBLUE);
+					}
+					r_strbuf_append (sb, "  ");
+					ch = ' ';
+					b += 2;
+					title = true;
+				} else if (!codeblock && r_str_startswith (b, "#")) {
+					RStrBuf *sb2 = r_strbuf_new ("");
+					while (*b) {
+						if (*b == '\n') {
+							b++;
+							break;
+						}
+						r_strbuf_appendf (sb2, "%c", *b);
+						b++;
+					}
+					char *sb2s = r_strbuf_drain (sb2);
+					char *sb2ss = r_str_ss (sb2s, 0, 0);
+					char *p = sb2ss;
+					char *nextlist = strstr (p, "\n");
+					if (usecolor) {
+						r_strbuf_append (sb, Color_BLACK);
+						r_strbuf_append (sb, Color_BGGREEN);
+					}
+					while (nextlist) {
+						char *line = r_str_ndup (p, nextlist - p);
+						r_strbuf_appendf (sb, "%s", line);
+						int col = strlen (line);
+						int i;
+						for (i = col; i < maxcol + 1; i++) {
+							r_strbuf_append (sb, " ");
+						}
+						if (usecolor) {
+							r_strbuf_append (sb, "  ");
+							r_strbuf_append (sb, " "Color_RESET_BG""Color_RESET"\n"Color_BGGREEN""Color_BLACK);
+						} else {
+							r_strbuf_append (sb, "   \n");
+						}
+						p = nextlist + 1;
+						nextlist = strstr (p, "\n");
+					}
+					//r_strbuf_append (sb, sb2ss);
+					free (sb2ss);
+					free (sb2s);
+					if (usecolor) {
+						r_strbuf_append (sb, Color_RESET_BG""Color_RESET"\n");
+					} else {
+						r_strbuf_append (sb, "\n");
+					}
+					title = false;
+					break;
+				} else {
+					if (codeblock) {
+						if (usecolor) {
+							r_strbuf_append (sb, "  "Color_BGYELLOW" "Color_BLACK);
+						} else {
+							r_strbuf_append (sb, "   ");
+						}
+					} else {
+						r_strbuf_append (sb, "  ");
+					}
+				}
+			}
+			col ++;
+			r_strbuf_appendf (sb, "%c", ch);
+			break;
+		}
+		b++;
+	}
+	return r_strbuf_drain (sb);
 }

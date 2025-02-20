@@ -129,6 +129,7 @@ CMDS=<<EOF
 e anal.vars.stackname=true
 e asm.lines.bb = false
 e asm.lines.jmp = false
+e asm.var.summary=0
 e io.cache=false
 e io.cache.read=false
 wc-*
@@ -453,7 +454,7 @@ tk a=b
 t*
 EOF
 EXPECT=<<EOF
-"tk a=b"
+'tk a=b
 EOF
 RUN
 
@@ -825,6 +826,7 @@ RUN
 NAME=Comments and var in struct offset propagation
 FILE=bins/elf/struct_sample
 CMDS=<<EOF
+e asm.var.summary=0
 aa
 s main
 "td struct Books {char  title[50];char  author[50]; char  subject[100];};"
@@ -1175,6 +1177,7 @@ RUN
 NAME=Caller to callee propgation (64 bits)
 FILE=bins/elf/arg_down_prop
 CMDS=<<EOF
+e asm.var.summary=0
 e asm.lines = false
 e asm.xrefs = false
 aa
@@ -1195,6 +1198,7 @@ RUN
 NAME=Caller to caller propgation (32 bits)
 FILE=bins/elf/arg_down_32
 CMDS=<<EOF
+e asm.var.summary=0
 e asm.lines = false
 e asm.xrefs = false
 aa
@@ -1443,6 +1447,7 @@ NAME=constrained type
 FILE=bins/elf/constr_type
 CMDS=<<EOF
 e anal.types.constraint = true
+e asm.var.summary=0
 aaa
 s sym.single_cond
 pd 1~4h
@@ -1605,19 +1610,25 @@ tn-*
 tn
 EOF
 EXPECT=<<EOF
+err
+errc
 RtlRaiseException
 FreeLibraryAndExitThread
 ExitProcess
 FatalExit
 RaiseException
+errx
 ExitThread
 8
 0x8
+err
+errc
 RtlRaiseException
 FreeLibraryAndExitThread
 ExitProcess
 FatalExit
 RaiseException
+errx
 ExitThread
 EOF
 RUN
@@ -1634,12 +1645,12 @@ tu* foo
 EOF
 EXPECT=<<EOF
 pf.foo dc a b
-"tk foo=union"
-"tk union.foo=a,b"
-"tk union.foo.a=int32_t,0,0"
-"tk union.foo.a.meta=0"
-"tk union.foo.b=char,0,0"
-"tk union.foo.b.meta=2"
+'tk foo=union
+'tk union.foo=a,b
+'tk union.foo.a=int32_t,0,0
+'tk union.foo.a.meta=0
+'tk union.foo.b=char,0,0
+'tk union.foo.b.meta=2
 pf dc a b
 pf.foo dc a b
 EOF

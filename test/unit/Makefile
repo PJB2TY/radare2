@@ -6,7 +6,7 @@ LDFLAGS+=-L$(LIBDIR)
 LDFLAGS+=-lr_core -lm -lr_config -lr_debug -lr_bin -lr_lang -lr_anal -lr_bp -lr_egg -lr_asm -lr_flag -lr_search -lr_syscall -lr_fs -lr_io -lr_socket -lr_cons -lr_magic -lr_crypto -lr_arch -lr_esil -lr_reg -lr_util -ldl
 CFLAGS+=-I$(INCLUDEDIR)
 CFLAGS+=-I../../libr/include
-CFLAGS+=-I../../shlr/sdb/include
+CFLAGS+=-I../../subprojects/sdb/include
 CFLAGS+=-g
 ifeq ($(ASAN),1)
 	ASAN_LD_PRELOAD=LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libasan.so.5
@@ -24,7 +24,13 @@ $(UNITS_BINDIR)/%: %.c
 	$(CC) $< -o $@ $(CFLAGS) $(LDFLAGS)
 
 run: $(BINS)
-	r=0 ; cd .. ; for a in $(BINS) ; do echo "$$a" ; $(ASAN_LD_PRELOAD) ./unit/$$a || r=1; done ; echo unit$$r ; exit $$r
+	@R=0 ; r=0 ; cd .. ; \
+	  for a in $(BINS) ; do \
+	  	echo "$$a" ; \
+		R=0 ; $(ASAN_LD_PRELOAD) ./unit/$$a || R=1; \
+		if [ "$$R" = 1 ]; then r=1; echo '[X''X]'; fi; \
+	  done ; \
+	echo unit$$r ; exit $$r
 
 clean:
 	rm -f $(BINS)

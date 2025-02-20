@@ -1,6 +1,5 @@
 /* radare - LGPL - Copyright 2017-2024 - pancake */
 
-#include <r_lib.h>
 #include <r_crypto.h>
 #include "crypto_serpent_algo.h"
 
@@ -113,9 +112,11 @@ static bool end(RCryptoJob *cj, const ut8 *buf, int len) {
 }
 
 RCryptoPlugin r_crypto_plugin_serpent = {
+	.type = R_CRYPTO_TYPE_ENCRYPT,
 	.meta = {
 		.name = "serpent-ecb",
-		.license = "LGPL",
+		.desc = "Serpent block cipher with Electronic Code Book mode",
+		.license = "LGPL-3.0-only",
 		.author = "pancake",
 	},
 	.set_key = serpent_set_key,

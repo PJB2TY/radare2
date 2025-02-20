@@ -1,4 +1,4 @@
-/* radare - LGPL - Copyright 2020-2023 - pancake, thestr4ng3r */
+/* radare - LGPL - Copyright 2020-2024 - pancake, thestr4ng3r */
 
 #include "r2r.h"
 #if ALLINC
@@ -27,6 +27,7 @@ typedef struct r2r_state_t {
 	HtPP *path_left; // char * (path to test file) => ut64 * (count of remaining tests)
 	RPVector completed_paths;
 	ut64 ok_count;
+	ut64 sk_count;
 	ut64 xx_count;
 	ut64 br_count;
 	ut64 fx_count;
@@ -42,6 +43,15 @@ static void interact_fix(R2RTestResultInfo *result, RPVector *fixup_results);
 static void interact_break(R2RTestResultInfo *result, RPVector *fixup_results);
 static void interact_commands(R2RTestResultInfo *result, RPVector *fixup_results);
 static void interact_diffchar(R2RTestResultInfo *result);
+
+R_IPI const char *getarchos(void) {
+	if (R_SYS_BITS_CHECK (R_SYS_BITS, 64)) {
+		return R_SYS_OS "-"R_SYS_ARCH "_64";
+	} else if (R_SYS_BITS_CHECK (R_SYS_BITS, 32)) {
+		return R_SYS_OS "-"R_SYS_ARCH "_32";
+	}
+	return R_SYS_OS "-"R_SYS_ARCH;
+}
 
 static void parse_skip(const char *arg) {
 	if (strstr (arg, "arch")) {
@@ -61,7 +71,23 @@ static void parse_skip(const char *arg) {
 	}
 }
 
-static int help(bool verbose) {
+static void helpvars(int workers_count) {
+	printf (
+		"R2R_SKIP_ARCHOS=0  # do not run the arch-os-specific tests\n"
+		"R2R_SKIP_JSON=0    # do not run the JSON tests\n"
+		"R2R_SKIP_FUZZ=0    # do not run the fuzz tests\n"
+		"R2R_SKIP_UNIT=0    # do not run the unit tests\n"
+		"R2R_SKIP_CMD=0     # do not run the cmds tests\n"
+		"R2R_SKIP_ASM=0     # do not run the rasm2 tests\n"
+		"R2R_JOBS=%d         # maximum parallel jobs\n"
+		"R2R_TIMEOUT=%d   # timeout after 1 minute (60 * 60)\n"
+		"R2R_OFFLINE=0      # same as passing -u\n"
+		"R2R_SHALLOW=0      # skip 0-100%% random tests\n"
+		, workers_count, TIMEOUT_DEFAULT
+	       );
+}
+
+static int help(bool verbose, int workers_count) {
 	printf ("Usage: r2r [-qvVnLi] [-C dir] [-F dir] [-f file] [-o file] [-s test] [-t seconds] [-j threads] [test file/dir | @test-type]\n");
 	if (verbose) {
 		printf (
@@ -72,27 +98,22 @@ static int help(bool verbose) {
 		" -f [file]    file to use for json tests (default is "JSON_TEST_FILE_DEFAULT")\n"
 		" -g           run the tests specified via '// R2R' comments in modified source files\n"
 		" -h           print this help\n"
+		" -H           display environment variables\n"
 		" -i           interactive mode\n"
 		" -j [threads] how many threads to use for running tests concurrently (default is "WORKERS_DEFAULT_STR")\n"
 		" -n           do nothing (don't run any test, just load/parse them)\n"
 		" -o [file]    output test run information in JSON format to file\n"
 		" -q           quiet\n"
 		" -s [test]    set R2R_SKIP_(TEST)=1 to skip running that test type\n"
+		" -S [0-100]   set R2R_SHALLOW=N to skip a random percentage of tests\n"
 		" -t [seconds] timeout per test (default is "TIMEOUT_DEFAULT_STR")\n"
 		" -u           do not git pull/clone test/bins (See R2R_OFFLINE)\n"
 		" -v           show version\n"
-		"\n"
-		"R2R_SKIP_ARCHOS=1  # do not run the arch-os-specific tests\n"
-		"R2R_SKIP_JSON=1    # do not run the JSON tests\n"
-		"R2R_SKIP_FUZZ=1    # do not run the fuzz tests\n"
-		"R2R_SKIP_UNIT=1    # do not run the unit tests\n"
-		"R2R_SKIP_CMD=1     # do not run the cmds tests\n"
-		"R2R_SKIP_ASM=1     # do not run the rasm2 tests\n"
-		"R2R_TIMEOUT=3600   # timeout after 1 minute (60 * 60)\n"
-		"R2R_OFFLINE=1      # same as passing -u\n"
-		"\n"
+		"\n");
+		helpvars (workers_count);
+		printf ("\n"
 		"Supported test types: @asm @json @unit @fuzz @arch @cmd\n"
-		"OS/Arch for archos tests: "R2R_ARCH_OS"\n");
+		"OS/Arch for archos tests: %s\n", getarchos ());
 	}
 	return 1;
 }
@@ -286,6 +307,7 @@ int main(int argc, char **argv) {
 	char *output_file = NULL;
 	char *fuzz_dir = NULL;
 	const char *r2r_dir = NULL;
+	int shallow = r_sys_getenv_asut64 ("R2R_SHALLOW");
 	ut64 timeout_sec = TIMEOUT_DEFAULT;
 	char *r2r_timeout = r_sys_getenv ("R2R_TIMEOUT");
 	if (R_STR_ISNOTEMPTY (r2r_timeout)) {
@@ -308,9 +330,13 @@ int main(int argc, char **argv) {
 		}
 	}
 #endif
+	ut64 r2r_jobs = r_sys_getenv_asut64 ("R2R_JOBS");
+	if (r2r_jobs > 0) {
+		workers_count = r2r_jobs;
+	}
 
 	RGetopt opt;
-	r_getopt_init (&opt, argc, (const char **)argv, "hqvj:r:m:f:C:LnVt:F:io:s:ug");
+	r_getopt_init (&opt, argc, (const char **)argv, "hqvj:r:m:f:C:LnVt:F:io:s:ugHS:");
 
 	int c;
 	while ((c = r_getopt_next (&opt)) != -1) {
@@ -319,7 +345,7 @@ int main(int argc, char **argv) {
 			r2r_git ();
 			return 0;
 		case 'h':
-			ret = help (true);
+			ret = help (true, workers_count);
 			goto beach;
 		case 'q':
 			quiet = true;
@@ -347,6 +373,12 @@ int main(int argc, char **argv) {
 		case 's':
 			parse_skip (opt.arg);
 			break;
+		case 'S':
+			{
+				shallow = atoi (opt.arg);
+				r_sys_setenv_asut64 ("R2R_SHALLOW", shallow);
+			}
+			break;
 		case 'F':
 			free (fuzz_dir);
 			fuzz_dir = strdup (opt.arg);
@@ -355,7 +387,7 @@ int main(int argc, char **argv) {
 			workers_count = atoi (opt.arg);
 			if (workers_count <= 0) {
 				R_LOG_ERROR ("Invalid thread count");
-				ret = help (false);
+				ret = help (false, workers_count);
 				goto beach;
 			}
 			break;
@@ -369,6 +401,9 @@ int main(int argc, char **argv) {
 			free (json_test_file);
 			json_test_file = strdup (opt.arg);
 			break;
+		case 'H':
+			helpvars (workers_count);
+			goto beach;
 		case 'u':
 			get_bins = false;
 			break;
@@ -383,7 +418,7 @@ int main(int argc, char **argv) {
 			output_file = r_file_abspath (opt.arg);
 			break;
 		default:
-			ret = help (false);
+			ret = help (false, workers_count);
 			goto beach;
 		}
 	}
@@ -409,6 +444,7 @@ int main(int argc, char **argv) {
 			dir_found = r2r_chdir (argv[0]);
 		}
 		if (!dir_found) {
+			free (cwd);
 			R_LOG_ERROR ("Cannot find db/ directory related to the given test");
 			return -1;
 		}
@@ -429,6 +465,7 @@ int main(int argc, char **argv) {
 	}
 
 	if (!r2r_subprocess_init ()) {
+		free (cwd);
 		R_LOG_ERROR ("Subprocess init failed");
 		return -1;
 	}
@@ -447,6 +484,14 @@ int main(int argc, char **argv) {
 	ut64 time_start = r_time_now_mono ();
 	R2RState state = {{0}};
 	state.run_config.r2_cmd = "radare2";
+	if (shallow > 0) {
+		r_num_irand ();
+		state.run_config.shallow = shallow;
+	}
+	state.run_config.skip_cmd = r_sys_getenv_asbool ("R2R_SKIP_CMD");
+	state.run_config.skip_asm = r_sys_getenv_asbool ("R2R_SKIP_ASM");
+	state.run_config.skip_json = r_sys_getenv_asbool ("R2R_SKIP_JSON");
+	state.run_config.skip_fuzz = r_sys_getenv_asbool ("R2R_SKIP_FUZZ");
 	state.run_config.rasm2_cmd = "rasm2";
 	state.run_config.json_test_file = json_test_file ? json_test_file : JSON_TEST_FILE_DEFAULT;
 	state.run_config.timeout_ms = (timeout_sec > UT64_MAX / 1000) ? UT64_MAX : timeout_sec * 1000;
@@ -481,6 +526,7 @@ int main(int argc, char **argv) {
 				eprintf ("Category: %s\n", arg);
 				if (!strcmp (arg, "unit")) {
 					if (!r2r_test_run_unit ()) {
+						free (cwd);
 						return -1;
 					}
 					continue;
@@ -524,6 +570,7 @@ int main(int argc, char **argv) {
 					}
 				}
 				r_list_free (tests);
+				free (cwd);
 				return grc;
 				// continue;
 			}
@@ -532,6 +579,7 @@ int main(int argc, char **argv) {
 				R_LOG_ERROR ("Failed to load tests from \"%s\"", tf);
 				r2r_test_database_free (state.db);
 				free (tf);
+				free (cwd);
 				return -1;
 			}
 			free (tf);
@@ -695,7 +743,7 @@ beach:
 }
 
 static void test_result_to_json(PJ *pj, R2RTestResultInfo *result) {
-	r_return_if_fail (pj && result);
+	R_RETURN_IF_FAIL (pj && result);
 	pj_o (pj);
 	pj_k (pj, "type");
 	R2RTest *test = result->test;
@@ -751,11 +799,27 @@ static RThreadFunctionRet worker_th(RThread *th) {
 		}
 		R2RTest *test = r_pvector_pop (&state->queue);
 		r_th_lock_leave (state->lock);
+		R2RRunConfig *cfg = &state->run_config;
 
-		R2RTestResultInfo *result = r2r_run_test (&state->run_config, test);
-
+		R2RTestResultInfo *result = NULL;
+		bool mustrun = true;
+		if (cfg->shallow > 0) {
+			// randomly skip
+			int rn = r_num_rand (100);
+			if (rn < cfg->shallow) {
+				mustrun = false;
+				state->sk_count++;
+			}
+		}
+		if (mustrun) {
+			result = r2r_run_test (cfg, test);
+		} else {
+			result = R_NEW0 (R2RTestResultInfo);
+			result->result = R2R_TEST_RESULT_OK;
+		}
 		r_th_lock_enter (state->lock);
 		r_pvector_push (&state->results, result);
+
 		switch (result->result) {
 		case R2R_TEST_RESULT_OK:
 			state->ok_count++;
@@ -978,8 +1042,9 @@ static void print_new_results(R2RState *state, ut64 prev_completed) {
 }
 
 static void print_state_counts(R2RState *state) {
-	printf ("%8"PFMT64u" OK  %8"PFMT64u" BR %8"PFMT64u" XX %8"PFMT64u" FX",
-			state->ok_count, state->br_count, state->xx_count, state->fx_count);
+	printf ("%8"PFMT64u" OK  %8"PFMT64u" BR %8"PFMT64u" XX %8"PFMT64u" SK %8"PFMT64u" FX",
+			state->ok_count, state->br_count, state->xx_count,
+			state->sk_count, state->fx_count);
 }
 
 static void print_state(R2RState *state, ut64 prev_completed) {
@@ -1253,7 +1318,7 @@ static void replace_cmd_kv_file(const char *path, ut64 line_begin, ut64 line_end
 }
 
 static void interact_fix(R2RTestResultInfo *result, RPVector *fixup_results) {
-	r_return_if_fail (result->test->type == R2R_TEST_TYPE_CMD);
+	R_RETURN_IF_FAIL (result->test->type == R2R_TEST_TYPE_CMD);
 	R2RCmdTest *test = result->test->cmd_test;
 	R2RProcessOutput *out = result->proc_out;
 	if (test->expect.value && out->out) {
@@ -1269,7 +1334,7 @@ static void interact_fix(R2RTestResultInfo *result, RPVector *fixup_results) {
 }
 
 static void interact_break(R2RTestResultInfo *result, RPVector *fixup_results) {
-	r_return_if_fail (result->test->type == R2R_TEST_TYPE_CMD);
+	R_RETURN_IF_FAIL (result->test->type == R2R_TEST_TYPE_CMD);
 	R2RCmdTest *test = result->test->cmd_test;
 	ut64 line_begin, line_end;
 	if (test->broken.set) {
@@ -1282,7 +1347,7 @@ static void interact_break(R2RTestResultInfo *result, RPVector *fixup_results) {
 }
 
 static void interact_commands(R2RTestResultInfo *result, RPVector *fixup_results) {
-	r_return_if_fail (result->test->type == R2R_TEST_TYPE_CMD);
+	R_RETURN_IF_FAIL (result->test->type == R2R_TEST_TYPE_CMD);
 	R2RCmdTest *test = result->test->cmd_test;
 	if (!test->cmds.value) {
 		return;

@@ -1,4 +1,4 @@
-/* radare - LGPL - Copyright 2019-2022 - GustavoLCR */
+/* radare - LGPL - Copyright 2019-2024 - GustavoLCR */
 
 #include <r_bin.h>
 #include "../format/le/le.h"
@@ -26,7 +26,7 @@ static bool check(RBinFile *bf, RBuffer *b) {
 }
 
 static bool load(RBinFile *bf, RBuffer *buf, ut64 loadaddr) {
-	r_return_val_if_fail (bf && buf, false);
+	R_RETURN_VAL_IF_FAIL (bf && buf, false);
 	RBinLEObj *res = r_bin_le_new_buf (buf);
 	if (res) {
 		bf->bo->bin_obj = res;
@@ -40,7 +40,7 @@ static void destroy(RBinFile *bf) {
 }
 
 static void header(RBinFile *bf) {
-	r_return_if_fail (bf && bf->rbin && bf->bo && bf->bo->bin_obj);
+	R_RETURN_IF_FAIL (bf && bf->rbin && bf->bo && bf->bo->bin_obj);
 	RBin *rbin = bf->rbin;
 	RBinLEObj *bin = bf->bo->bin_obj;
 	LE_image_header *h = bin->header;
@@ -229,8 +229,9 @@ RBinPlugin r_bin_plugin_le = {
 		.name = "le",
 		.desc = "LE/LX format r2 plugin",
 		.author = "GustavoLCR",
-		.license = "LGPL3",
+		.license = "LGPL-3.0-only",
 	},
+	.weak_guess = true,
 	.check = &check,
 	.load = &load,
 	.destroy = &destroy,
